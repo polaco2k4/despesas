@@ -3,17 +3,37 @@ import { useAuth } from '../contexts/AuthContext';
 import { despesasAPI, orcamentosAPI, departamentosAPI } from '../lib/mockApi';
 import type { Despesa, Orcamento, Departamento } from '../types/database';
 import { 
-  FileText, 
   Download, 
-  Filter, 
-  Calendar,
-  Building2,
+  Clock,
+  XCircle,
+  ArrowUpDown,
   TrendingUp,
-  PieChart,
-  BarChart3
+  DollarSign,
+  AlertCircle,
+  CheckCircle2,
+  Filter,
+  BarChart2 as BarChartIcon,
+  LineChart as LineChartIcon,
+  PieChart as PieChartIcon
 } from 'lucide-react';
+import { Chart as ChartJS, registerables, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
+import { Bar, Line, Pie } from 'react-chartjs-2';
+import 'chartjs-adapter-date-fns';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 // Extend jsPDF type to include autoTable
 declare module 'jspdf' {
@@ -22,17 +42,55 @@ declare module 'jspdf' {
   }
 }
 
+// Define chart options type
+type ChartOptions = {
+  responsive: boolean;
+  plugins: {
+    legend: {
+      position: 'top' | 'bottom' | 'left' | 'right' | 'chartArea' | 'center' | { [scaleId: string]: number } | undefined;
+    };
+    tooltip: {
+      callbacks: {
+        label: (context: any) => string;
+      };
+    };
+  };
+  scales?: {
+    y?: {
+      beginAtZero: boolean;
+      ticks?: {
+        callback: (value: any) => string;
+      };
+      grid?: {
+        display: boolean;
+      };
+    };
+    x?: {
+      grid?: {
+        display: boolean;
+      };
+      ticks?: {
+        callback: (value: any) => string;
+      };
+    };
+  };
+  indexAxis?: 'x' | 'y';
+};
+
+
 const Relatorios: React.FC = () => {
   const { userProfile } = useAuth();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rubricas, setRubricas] = useState<{id: string, nome: string}[]>([]);
   const [filters, setFilters] = useState({
     departamento_id: '',
     ano: new Date().getFullYear(),
     status: '',
-    mes: ''
+    mes: '',
+    rubrica_id: ''
   });
 
   useEffect(() => {
@@ -47,9 +105,21 @@ const Relatorios: React.FC = () => {
         departamentosAPI.getAll()
       ]);
       
+      // Extract unique rubricas from despesas
+      const rubricasMap = new Map();
+      despesasData.forEach(despesa => {
+        if (despesa.rubrica) {
+          rubricasMap.set(despesa.rubrica.id, {
+            id: despesa.rubrica.id,
+            nome: despesa.rubrica.nome
+          });
+        }
+      });
+      
       setDespesas(despesasData);
       setOrcamentos(orcamentosData);
       setDepartamentos(departamentosData);
+      setRubricas(Array.from(rubricasMap.values()));
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -64,8 +134,9 @@ const Relatorios: React.FC = () => {
     const matchesAno = despesaDate.getFullYear() === filters.ano;
     const matchesStatus = !filters.status || despesa.status === filters.status;
     const matchesMes = !filters.mes || (despesaDate.getMonth() + 1).toString() === filters.mes;
+    const matchesRubrica = !filters.rubrica_id || despesa.rubrica_id === filters.rubrica_id;
     
-    return matchesDepartamento && matchesAno && matchesStatus && matchesMes;
+    return matchesDepartamento && matchesAno && matchesStatus && matchesMes && matchesRubrica;
   });
 
   const filteredOrcamentos = orcamentos.filter(orcamento => {
@@ -109,6 +180,13 @@ const Relatorios: React.FC = () => {
                     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
       doc.text(`Mês: ${meses[parseInt(filters.mes) - 1]}`, 20, yPos);
       yPos += 5;
+    }
+    if (filters.rubrica_id) {
+      const rubrica = rubricas.find(r => r.id === filters.rubrica_id);
+      if (rubrica) {
+        doc.text(`Rubrica: ${rubrica.nome}`, 20, yPos);
+        yPos += 5;
+      }
     }
     
     yPos += 10;
@@ -192,6 +270,92 @@ const Relatorios: React.FC = () => {
 
   const statusStats = getStatusStats();
   const departmentStats = getDepartmentStats();
+  const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  // Prepare data for charts
+  const statusChartData = {
+    labels: ['Pendentes', 'Aprovadas', 'Rejeitadas'],
+    datasets: [{
+      data: [statusStats.pendentes, statusStats.aprovadas, statusStats.rejeitadas],
+      backgroundColor: ['#F59E0B', '#10B981', '#EF4444'],
+      borderWidth: 1,
+    }]
+  };
+
+  // Monthly expenses data
+  const monthlyExpenses = Array(12).fill(0);
+  filteredDespesas.forEach(despesa => {
+    if (despesa.status === 'aprovada') {
+      const month = new Date(despesa.created_at).getMonth();
+      monthlyExpenses[month] += despesa.valor;
+    }
+  });
+
+  const monthlyChartData = {
+    labels: meses,
+    datasets: [{
+      label: 'Despesas por Mês (€)',
+      data: monthlyExpenses,
+      backgroundColor: 'rgba(59, 130, 246, 0.5)',
+      borderColor: 'rgba(59, 130, 246, 1)',
+      borderWidth: 2,
+      tension: 0.3,
+      fill: true
+    }]
+  };
+
+  // Department expenses data
+  const departmentChartData = {
+    labels: departmentStats.map(dept => dept.nome),
+    datasets: [{
+      label: 'Despesas por Departamento (€)',
+      data: departmentStats.map(dept => dept.total),
+      backgroundColor: [
+        'rgba(59, 130, 246, 0.7)',
+        'rgba(16, 185, 129, 0.7)',
+        'rgba(245, 158, 11, 0.7)',
+        'rgba(139, 92, 246, 0.7)',
+        'rgba(20, 184, 166, 0.7)'
+      ],
+      borderWidth: 1
+    }]
+  };
+
+  // Chart options
+  const chartOptions: ChartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => `€${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: (value) => `€${value}`
+        }
+      }
+    }
+  };
+
+  // Top 5 despesas
+  const topDespesas = [...filteredDespesas]
+    .sort((a, b) => b.valor - a.valor)
+    .slice(0, 5);
+
+  // Calculate total values
+  const totalOrcamento = filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0);
+  const totalDespesas = filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
+  const utilizacao = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
+  const totalPendentes = filteredDespesas.filter(d => d.status === 'pendente').length;
+  const totalAprovadas = filteredDespesas.filter(d => d.status === 'aprovada').length;
+  const totalRejeitadas = filteredDespesas.filter(d => d.status === 'rejeitada').length;
 
   if (loading) {
     return (
@@ -222,7 +386,7 @@ const Relatorios: React.FC = () => {
           Filtros
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
             <select
@@ -288,121 +452,303 @@ const Relatorios: React.FC = () => {
               <option value="12">Dezembro</option>
             </select>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Rubrica</label>
+            <select
+              value={filters.rubrica_id}
+              onChange={(e) => setFilters({ ...filters, rubrica_id: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todas as rubricas</option>
+              {rubricas.map((rubrica) => (
+                <option key={rubrica.id} value={rubrica.id}>
+                  {rubrica.nome}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <PieChart className="h-6 w-6 text-blue-600" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-blue-50 rounded-xl">
+              <DollarSign className="h-6 w-6 text-blue-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Orçamento Total</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                €{filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0).toLocaleString()}
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Orçamento Total</p>
+              <p className="text-xl font-bold text-gray-900">
+                €{totalOrcamento.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Disponível</span>
+              <span className="font-medium text-green-600">
+                €{(totalOrcamento - totalDespesas).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-50 rounded-lg">
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-green-50 rounded-xl">
               <TrendingUp className="h-6 w-6 text-green-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Despesas Aprovadas</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                €{filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0).toLocaleString()}
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Despesas Aprovadas</p>
+              <p className="text-xl font-bold text-gray-900">
+                €{totalDespesas.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">Taxa de Utilização</span>
+              <span className={`font-semibold ${utilizacao > 80 ? 'text-red-600' : utilizacao > 50 ? 'text-yellow-600' : 'text-green-600'}`}>
+                {utilizacao.toFixed(1)}%
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-50 rounded-lg">
-              <Calendar className="h-6 w-6 text-yellow-600" />
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-amber-50 rounded-xl">
+              <AlertCircle className="h-6 w-6 text-amber-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Total Despesas</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {filteredDespesas.length}
-              </p>
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Status das Despesas</p>
+              <div className="flex items-center justify-end space-x-4 mt-1">
+                <span className="text-xs text-amber-600 flex items-center">
+                  <Clock className="h-3 w-3 mr-1" /> {totalPendentes}
+                </span>
+                <span className="text-xs text-green-600 flex items-center">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> {totalAprovadas}
+                </span>
+                <span className="text-xs text-red-600 flex items-center">
+                  <XCircle className="h-3 w-3 mr-1" /> {totalRejeitadas}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div 
+                className="bg-amber-500 h-1.5 rounded-full" 
+                style={{ width: `${(totalPendentes / filteredDespesas.length) * 100 || 0}%` }}
+              ></div>
+              <div 
+                className="bg-green-500 h-1.5 rounded-full -mt-1.5" 
+                style={{ width: `${(totalAprovadas / filteredDespesas.length) * 100 || 0}%` }}
+              ></div>
+              <div 
+                className="bg-red-500 h-1.5 rounded-full -mt-1.5" 
+                style={{ width: `${(totalRejeitadas / filteredDespesas.length) * 100 || 0}%` }}
+              ></div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <BarChart3 className="h-6 w-6 text-purple-600" />
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-purple-50 rounded-xl">
+              <BarChartIcon className="h-6 w-6 text-purple-600" />
             </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-600">Taxa Utilização</p>
-              <p className="text-2xl font-semibold text-gray-900">
-                {filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0) > 0 
-                  ? ((filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0) / 
-                     filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0)) * 100).toFixed(1)
-                  : '0'}%
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Média Mensal</p>
+              <p className="text-xl font-bold text-gray-900">
+                €{(totalDespesas / 12).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Maior despesa</span>
+              <span className="font-medium text-gray-900">
+                {topDespesas[0] ? `€${topDespesas[0].valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Charts */}
+      {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Status Distribution */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Distribuição por Status</h3>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-yellow-500 rounded mr-3"></div>
-                <span className="text-sm text-gray-600">Pendentes</span>
-              </div>
-              <span className="font-semibold">{statusStats.pendentes}</span>
+        {/* Monthly Expenses Chart */}
+        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Despesas Mensais</h3>
+            <div className="flex items-center text-sm text-gray-500">
+              <LineChartIcon className="h-4 w-4 mr-1 text-blue-600" />
+              <span>Evolução</span>
             </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-green-500 rounded mr-3"></div>
-                <span className="text-sm text-gray-600">Aprovadas</span>
-              </div>
-              <span className="font-semibold">{statusStats.aprovadas}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-red-500 rounded mr-3"></div>
-                <span className="text-sm text-gray-600">Rejeitadas</span>
-              </div>
-              <span className="font-semibold">{statusStats.rejeitadas}</span>
-            </div>
+          </div>
+          <div className="h-64">
+            <Line 
+              data={monthlyChartData} 
+              options={{
+                ...chartOptions,
+                plugins: {
+                  ...chartOptions.plugins,
+                  tooltip: {
+                    callbacks: {
+                      label: (context) => `€${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    }
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      callback: (value) => `€${value}`
+                    }
+                  }
+                }
+              }} 
+            />
           </div>
         </div>
 
-        {/* Department Stats */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Despesas por Departamento</h3>
-          <div className="space-y-4">
-            {departmentStats.map((dept, index) => (
-              <div key={index} className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-900">{dept.nome}</span>
-                  <span className="text-sm text-gray-600">€{dept.aprovadas.toLocaleString()}</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
+        {/* Status Distribution */}
+        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Distribuição por Status</h3>
+            <div className="flex items-center text-sm text-gray-500">
+              <PieChartIcon className="h-4 w-4 mr-1 text-green-600" />
+              <span>Visão Geral</span>
+            </div>
+          </div>
+          <div className="h-64 flex items-center justify-center">
+            <div className="w-48 h-48">
+              <Pie 
+                data={statusChartData} 
+                options={{
+                  responsive: true,
+                  plugins: {
+                    legend: {
+                      position: 'right',
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: (context) => {
+                          const label = context.label || '';
+                          const value = context.raw as number;
+                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                          const percentage = Math.round((value / total) * 100);
+                          return `${label}: ${value} (${percentage}%)`;
+                        }
+                      }
+                    }
+                  }
+                }} 
+              />
+            </div>
+            <div className="ml-8 space-y-3">
+              {statusChartData.labels.map((label, index) => (
+                <div key={index} className="flex items-center">
                   <div 
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{ 
-                      width: `${Math.max((dept.aprovadas / Math.max(...departmentStats.map(d => d.aprovadas))) * 100, 5)}%` 
-                    }}
+                    className="w-3 h-3 rounded-full mr-2" 
+                    style={{ backgroundColor: statusChartData.datasets[0].backgroundColor[index] }}
                   ></div>
+                  <span className="text-sm text-gray-600">{label}</span>
+                  <span className="ml-2 text-sm font-medium text-gray-900">
+                    {statusChartData.datasets[0].data[index]}
+                  </span>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Department Expenses */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Despesas por Departamento</h3>
+            <div className="flex items-center text-sm text-gray-500">
+              <BarChartIcon className="h-4 w-4 mr-1 text-purple-600" />
+              <span>Comparação</span>
+            </div>
+          </div>
+          <div className="h-80">
+            <Bar 
+              data={departmentChartData} 
+              options={{
+                ...chartOptions,
+                indexAxis: 'y' as const,
+                scales: {
+                  x: {
+                    beginAtZero: true,
+                    grid: {
+                      display: false
+                    },
+                    ticks: {
+                      callback: (value) => `€${value}`
+                    }
+                  },
+                  y: {
+                    grid: {
+                      display: false
+                    }
+                  }
+                }
+              }} 
+            />
+          </div>
+        </div>
+
+        {/* Top Despesas */}
+        <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Maiores Despesas</h3>
+            <div className="flex items-center text-sm text-gray-500">
+              <ArrowUpDown className="h-4 w-4 mr-1 text-amber-600" />
+              <span>Top 5</span>
+            </div>
+          </div>
+          <div className="space-y-4">
+            {topDespesas.length > 0 ? (
+              topDespesas.map((despesa, index) => (
+                <div key={despesa.id} className="flex items-start">
+                  <div className="flex-shrink-0 h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 font-medium">
+                    {index + 1}
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-gray-900 line-clamp-1">
+                        {despesa.descricao}
+                      </h4>
+                      <span className="text-sm font-semibold text-gray-900 ml-2">
+                        €{despesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center text-xs text-gray-500">
+                      <span>{new Date(despesa.created_at).toLocaleDateString('pt-PT')}</span>
+                      <span className="mx-2">•</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs ${
+                        despesa.status === 'aprovada' ? 'bg-green-100 text-green-800' :
+                        despesa.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {despesa.status.charAt(0).toUpperCase() + despesa.status.slice(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Nenhuma despesa encontrada com os filtros atuais
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
