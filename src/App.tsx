@@ -9,9 +9,11 @@ import Fornecedores from './components/Fornecedores';
 import Relatorios from './components/Relatorios';
 import Configuracoes from './components/Configuracoes';
 
+// Import the new Usuarios component
+import Usuarios from './components/Usuarios';
+
 // Placeholder components for other pages
 const Departamentos = () => <div className="text-center py-12"><h2 className="text-2xl font-bold text-gray-900">Departamentos</h2><p className="text-gray-600 mt-2">Funcionalidade em desenvolvimento</p></div>;
-const Usuarios = () => <div className="text-center py-12"><h2 className="text-2xl font-bold text-gray-900">Utilizadores</h2><p className="text-gray-600 mt-2">Funcionalidade em desenvolvimento</p></div>;
 
 const AppContent: React.FC = () => {
   const { userProfile, loading } = useAuth();
