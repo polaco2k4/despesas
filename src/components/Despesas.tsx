@@ -1,0 +1,503 @@
+import React, { useEffect, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { despesasAPI, rubricasAPI, aprovacoesAPI, orcamentosAPI } from '../lib/mockApi';
+import type { Despesa, Rubrica, Orcamento } from '../types/database';
+import { 
+  Plus, 
+  Search, 
+  Filter, 
+  CheckCircle, 
+  XCircle, 
+  Clock, 
+  Edit, 
+  Trash2,
+  Eye,
+  FileText
+} from 'lucide-react';
+
+const Despesas: React.FC = () => {
+  const { userProfile } = useAuth();
+  const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [rubricas, setRubricas] = useState<Rubrica[]>([]);
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
+  const [newDespesa, setNewDespesa] = useState({
+    rubrica_id: '',
+    descricao: '',
+    valor: '',
+    anexo_url: ''
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [despesasData, rubricasData, orcamentosData] = await Promise.all([
+        despesasAPI.getAll({}),
+        rubricasAPI.getAll(),
+        orcamentosAPI.getAll()
+      ]);
+      
+      setDespesas(despesasData);
+      setRubricas(rubricasData);
+      setOrcamentos(orcamentosData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateDespesa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      await despesasAPI.create({
+        rubrica_id: newDespesa.rubrica_id,
+        usuario_id: userProfile!.id,
+        descricao: newDespesa.descricao,
+        valor: parseFloat(newDespesa.valor),
+        anexo_url: newDespesa.anexo_url || null
+      });
+      
+      setShowCreateModal(false);
+      setNewDespesa({ rubrica_id: '', descricao: '', valor: '', anexo_url: '' });
+      await fetchData();
+    } catch (error) {
+      console.error('Error creating despesa:', error);
+    }
+  };
+
+  const handleApproval = async (despesaId: string, status: 'aprovada' | 'rejeitada', comentario?: string) => {
+    try {
+      await aprovacoesAPI.create({
+        despesa_id: despesaId,
+        status,
+        comentario
+      });
+      
+      await fetchData();
+      setShowDetailModal(false);
+    } catch (error) {
+      console.error('Error processing approval:', error);
+    }
+  };
+
+  const handleDeleteDespesa = async (id: string) => {
+    if (confirm('Tem certeza que deseja apagar esta despesa?')) {
+      try {
+        await despesasAPI.delete(id);
+        await fetchData();
+      } catch (error) {
+        console.error('Error deleting despesa:', error);
+      }
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'aprovada': return 'text-green-600 bg-green-50';
+      case 'rejeitada': return 'text-red-600 bg-red-50';
+      case 'pendente': return 'text-yellow-600 bg-yellow-50';
+      default: return 'text-gray-600 bg-gray-50';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'aprovada': return 'Aprovada';
+      case 'rejeitada': return 'Rejeitada';
+      case 'pendente': return 'Pendente';
+      default: return status;
+    }
+  };
+
+  const canCreateDespesa = userProfile?.role === 'colaborador';
+  const canApprove = userProfile?.role === 'gestor' || userProfile?.role === 'admin';
+
+  const filteredDespesas = despesas.filter(despesa => {
+    const matchesSearch = despesa.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         despesa.usuario?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         despesa.rubrica?.nome.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = !statusFilter || despesa.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const availableRubricas = rubricas.filter(rubrica => {
+    if (userProfile?.role === 'admin') return true;
+    return rubrica.orcamento?.departamento_id === userProfile?.departamento_id;
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-gray-900">Despesas</h1>
+        {canCreateDespesa && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+          >
+            <Plus size={20} />
+            <span>Nova Despesa</span>
+          </button>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Pesquisar</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Pesquisar despesas..."
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Todos os status</option>
+              <option value="pendente">Pendente</option>
+              <option value="aprovada">Aprovada</option>
+              <option value="rejeitada">Rejeitada</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Despesas List */}
+      <div className="bg-white rounded-lg shadow">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Descrição
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Valor
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Rubrica
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Solicitante
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Data
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredDespesas.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    Nenhuma despesa encontrada
+                  </td>
+                </tr>
+              ) : (
+                filteredDespesas.map((despesa) => (
+                  <tr key={despesa.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-medium text-gray-900">
+                        {despesa.descricao}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      €{despesa.valor.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {despesa.rubrica?.nome}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {despesa.usuario?.nome}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(despesa.status)}`}>
+                        {getStatusText(despesa.status)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {new Date(despesa.created_at).toLocaleDateString('pt-PT')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedDespesa(despesa);
+                            setShowDetailModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Ver detalhes"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        
+                        {despesa.usuario_id === userProfile?.id && despesa.status === 'pendente' && (
+                          <button
+                            onClick={() => handleDeleteDespesa(despesa.id)}
+                            className="text-red-600 hover:text-red-700"
+                            title="Apagar despesa"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Nova Despesa</h2>
+            
+            <form onSubmit={handleCreateDespesa} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Rubrica
+                </label>
+                <select
+                  value={newDespesa.rubrica_id}
+                  onChange={(e) => setNewDespesa({ ...newDespesa, rubrica_id: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Selecionar rubrica</option>
+                  {availableRubricas.map((rubrica) => (
+                    <option key={rubrica.id} value={rubrica.id}>
+                      {rubrica.nome} - {rubrica.orcamento?.departamento?.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  value={newDespesa.descricao}
+                  onChange={(e) => setNewDespesa({ ...newDespesa, descricao: e.target.value })}
+                  required
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Descrição da despesa..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor (€)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newDespesa.valor}
+                  onChange={(e) => setNewDespesa({ ...newDespesa, valor: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="0.00"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  URL do Anexo (opcional)
+                </label>
+                <input
+                  type="url"
+                  value={newDespesa.anexo_url}
+                  onChange={(e) => setNewDespesa({ ...newDespesa, anexo_url: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition-colors"
+                >
+                  Criar Despesa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setNewDespesa({ rubrica_id: '', descricao: '', valor: '', anexo_url: '' });
+                  }}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-md transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {showDetailModal && selectedDespesa && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">Detalhes da Despesa</h2>
+              <button
+                onClick={() => setShowDetailModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Valor</label>
+                  <p className="text-lg font-semibold text-gray-900">€{selectedDespesa.valor.toLocaleString()}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Status</label>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedDespesa.status)}`}>
+                    {getStatusText(selectedDespesa.status)}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Descrição</label>
+                <p className="text-gray-900">{selectedDespesa.descricao}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Solicitante</label>
+                  <p className="text-gray-900">{selectedDespesa.usuario?.nome}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Rubrica</label>
+                  <p className="text-gray-900">{selectedDespesa.rubrica?.nome}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Data de Criação</label>
+                <p className="text-gray-900">{new Date(selectedDespesa.created_at).toLocaleString('pt-PT')}</p>
+              </div>
+
+              {selectedDespesa.anexo_url && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Anexo</label>
+                  <a 
+                    href={selectedDespesa.anexo_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-700 flex items-center space-x-2"
+                  >
+                    <FileText size={16} />
+                    <span>Ver anexo</span>
+                  </a>
+                </div>
+              )}
+
+              {/* Aprovações */}
+              {selectedDespesa.aprovacoes && selectedDespesa.aprovacoes.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Histórico de Aprovações</label>
+                  <div className="space-y-2">
+                    {selectedDespesa.aprovacoes.map((aprovacao) => (
+                      <div key={aprovacao.id} className="bg-gray-50 p-3 rounded-md">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-900">{aprovacao.aprovador?.nome}</p>
+                            <p className="text-sm text-gray-600">{aprovacao.role}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(aprovacao.status)}`}>
+                              {getStatusText(aprovacao.status)}
+                            </span>
+                            <p className="text-sm text-gray-600">
+                              {new Date(aprovacao.aprovado_em).toLocaleString('pt-PT')}
+                            </p>
+                          </div>
+                        </div>
+                        {aprovacao.comentario && (
+                          <p className="mt-2 text-sm text-gray-700">{aprovacao.comentario}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Approval Actions */}
+              {canApprove && selectedDespesa.status === 'pendente' && (
+                <div className="border-t pt-4">
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => handleApproval(selectedDespesa.id, 'aprovada')}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
+                    >
+                      <CheckCircle size={20} />
+                      <span>Aprovar</span>
+                    </button>
+                    <button
+                      onClick={() => handleApproval(selectedDespesa.id, 'rejeitada')}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
+                    >
+                      <XCircle size={20} />
+                      <span>Rejeitar</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Despesas;
