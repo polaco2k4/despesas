@@ -1,15 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { despesasAPI, rubricasAPI, aprovacoesAPI, orcamentosAPI } from '../lib/mockApi';
+import { despesasAPI, rubricasAPI, aprovacoesAPI, orcamentosAPI, fornecedoresAPI } from '../lib/mockApi';
 import type { Despesa, Rubrica, Orcamento } from '../types/database';
 import { 
   Plus, 
   Search, 
-  Filter, 
   CheckCircle, 
   XCircle, 
-  Clock, 
-  Edit, 
   Trash2,
   Eye,
   FileText
@@ -18,8 +15,7 @@ import {
 const Despesas: React.FC = () => {
   const { userProfile } = useAuth();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
-  const [rubricas, setRubricas] = useState<Rubrica[]>([]);
-  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
+  const [rubricas, setRubricas] = useState<Array<Rubrica & { orcamento?: { valor_total: number; departamento?: { nome: string } } }>>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -30,24 +26,42 @@ const Despesas: React.FC = () => {
     rubrica_id: '',
     descricao: '',
     valor: '',
-    anexo_url: ''
+    anexo: null as File | null,
+    fornecedor_id: '',
+    numero_pedido: '',
+    valor_orcamento: '',
+    orcamento_disponivel: '',
+    orcamento_realizado: ''
   });
+  
+  const [fornecedores, setFornecedores] = useState<Array<{id: string, nome: string}>>([]);
 
   useEffect(() => {
     fetchData();
+    fetchFornecedores();
   }, []);
+
+  const fetchFornecedores = async () => {
+    try {
+      const fornecedoresData = await fornecedoresAPI.getAll();
+      setFornecedores(fornecedoresData.map((f: { id: string; nome: string }) => ({
+        id: f.id,
+        nome: f.nome
+      })));
+    } catch (error) {
+      console.error('Error fetching fornecedores:', error);
+    }
+  };
 
   const fetchData = async () => {
     try {
-      const [despesasData, rubricasData, orcamentosData] = await Promise.all([
+      const [despesasData, rubricasData] = await Promise.all([
         despesasAPI.getAll({}),
-        rubricasAPI.getAll(),
-        orcamentosAPI.getAll()
+        rubricasAPI.getAll()
       ]);
       
       setDespesas(despesasData);
       setRubricas(rubricasData);
-      setOrcamentos(orcamentosData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -55,23 +69,83 @@ const Despesas: React.FC = () => {
     }
   };
 
+  const handleRubricaChange = async (rubricaId: string) => {
+    if (!rubricaId) {
+      setNewDespesa(prev => ({
+        ...prev,
+        rubrica_id: '',
+        valor_orcamento: '',
+        orcamento_disponivel: '',
+        orcamento_realizado: ''
+      }));
+      return;
+    }
+
+    try {
+      // Find the selected rubrica
+      const rubrica = rubricas.find(r => r.id === rubricaId);
+      if (!rubrica || !rubrica.orcamento) return;
+
+      // Calculate total expenses for this rubrica
+      const allDespesas = await despesasAPI.getAll({});
+      const despesasRubrica = allDespesas.filter(d => d.rubrica_id === rubricaId);
+      const totalGasto = despesasRubrica.reduce((sum, d) => sum + d.valor, 0);
+      const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
+
+      setNewDespesa(prev => ({
+        ...prev,
+        rubrica_id: rubricaId,
+        valor_orcamento: rubrica.orcamento!.valor_total.toString(),
+        orcamento_disponivel: orcamentoDisponivel.toString(),
+        orcamento_realizado: totalGasto.toString()
+      }));
+    } catch (error) {
+      console.error('Error fetching rubrica data:', error);
+    }
+  };
+
   const handleCreateDespesa = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      await despesasAPI.create({
-        rubrica_id: newDespesa.rubrica_id,
-        usuario_id: userProfile!.id,
-        descricao: newDespesa.descricao,
-        valor: parseFloat(newDespesa.valor),
-        anexo_url: newDespesa.anexo_url || null
-      });
+      const formData = new FormData();
+      formData.append('rubrica_id', newDespesa.rubrica_id);
+      formData.append('usuario_id', userProfile!.id);
+      formData.append('descricao', newDespesa.descricao);
+      formData.append('valor', newDespesa.valor);
+      formData.append('fornecedor_id', newDespesa.fornecedor_id);
+      formData.append('numero_pedido', newDespesa.numero_pedido);
+      formData.append('valor_orcamento', newDespesa.valor_orcamento);
+      formData.append('orcamento_disponivel', newDespesa.orcamento_disponivel);
+      formData.append('orcamento_realizado', newDespesa.orcamento_realizado);
+      
+      if (newDespesa.anexo) {
+        formData.append('anexo', newDespesa.anexo);
+      }
+
+      await despesasAPI.create(formData as any);
       
       setShowCreateModal(false);
-      setNewDespesa({ rubrica_id: '', descricao: '', valor: '', anexo_url: '' });
+      setNewDespesa({ 
+        rubrica_id: '', 
+        descricao: '', 
+        valor: '', 
+        anexo: null,
+        fornecedor_id: '',
+        numero_pedido: '',
+        valor_orcamento: '',
+        orcamento_disponivel: '',
+        orcamento_realizado: ''
+      });
       await fetchData();
     } catch (error) {
       console.error('Error creating despesa:', error);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setNewDespesa({ ...newDespesa, anexo: e.target.files[0] });
     }
   };
 
@@ -298,7 +372,7 @@ const Despesas: React.FC = () => {
                 </label>
                 <select
                   value={newDespesa.rubrica_id}
-                  onChange={(e) => setNewDespesa({ ...newDespesa, rubrica_id: e.target.value })}
+                  onChange={(e) => handleRubricaChange(e.target.value)}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
@@ -341,17 +415,110 @@ const Despesas: React.FC = () => {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Número do Pedido
+                  </label>
+                  <input
+                    type="text"
+                    value={newDespesa.numero_pedido}
+                    onChange={(e) => setNewDespesa({ ...newDespesa, numero_pedido: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Número sequencial"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fornecedor
+                  </label>
+                  <select
+                    value={newDespesa.fornecedor_id}
+                    onChange={(e) => setNewDespesa({ ...newDespesa, fornecedor_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Selecionar fornecedor</option>
+                    {fornecedores.map((fornecedor) => (
+                      <option key={fornecedor.id} value={fornecedor.id}>
+                        {fornecedor.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor do Orçamento (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newDespesa.valor_orcamento}
+                    readOnly
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Orçamento Disponível (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newDespesa.orcamento_disponivel}
+                    readOnly
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Orçamento Realizado (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newDespesa.orcamento_realizado}
+                    readOnly
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  URL do Anexo (opcional)
+                  Anexo (opcional)
                 </label>
-                <input
-                  type="url"
-                  value={newDespesa.anexo_url}
-                  onChange={(e) => setNewDespesa({ ...newDespesa, anexo_url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="https://..."
-                />
+                <div className="mt-1 flex items-center">
+                  <label className="w-full flex flex-col items-center px-4 py-6 bg-white text-blue-600 rounded-lg shadow tracking-wide uppercase border border-blue-600 cursor-pointer hover:bg-blue-50">
+                    <svg className="w-8 h-8" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M16.88 9.1A4 4 0 0 1 16 17H5a5 5 0 0 1-1-9.9V7a3 3 0 0 1 4.52-2.59A4.98 4.98 0 0 1 17 8c0 .38-.04.74-.12 1.1zM11 11h3l-4-4-4 4h3v3h2v-3z" />
+                    </svg>
+                    <span className="mt-2 text-base leading-normal">
+                      {newDespesa.anexo ? newDespesa.anexo.name : 'Selecionar ficheiro'}
+                    </span>
+                    <input 
+                      type="file" 
+                      className="hidden" 
+                      onChange={handleFileChange}
+                    />
+                  </label>
+                </div>
               </div>
 
               <div className="flex space-x-3 pt-4">
@@ -365,7 +532,17 @@ const Despesas: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setNewDespesa({ rubrica_id: '', descricao: '', valor: '', anexo_url: '' });
+                    setNewDespesa({ 
+                      rubrica_id: '', 
+                      descricao: '', 
+                      valor: '', 
+                      anexo: null,
+                      fornecedor_id: '',
+                      numero_pedido: '',
+                      valor_orcamento: '',
+                      orcamento_disponivel: '',
+                      orcamento_realizado: ''
+                    });
                   }}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-md transition-colors"
                 >

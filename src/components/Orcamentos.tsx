@@ -30,9 +30,12 @@ const Orcamentos: React.FC = () => {
   });
   const [newRubrica, setNewRubrica] = useState({
     nome: '',
-    descricao: ''
+    descricao: '',
+    valor: ''
   });
+  const [rubricaError, setRubricaError] = useState('');
   const [showRubricaModal, setShowRubricaModal] = useState(false);
+  const [editingRubrica, setEditingRubrica] = useState<Rubrica | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -77,22 +80,59 @@ const Orcamentos: React.FC = () => {
     
     if (!selectedOrcamento) return;
     
+    // Validate valor is a positive number
+    const valor = parseFloat(newRubrica.valor);
+    if (isNaN(valor) || valor <= 0) {
+      setRubricaError('Por favor, insira um valor válido maior que zero.');
+      return;
+    }
+    
     try {
-      await rubricasAPI.create({
-        nome: newRubrica.nome,
-        descricao: newRubrica.descricao,
-        orcamento_id: selectedOrcamento.id
-      });
+      // Get all rubrics for this budget
+      const rubricas = await rubricasAPI.getByOrcamento(selectedOrcamento.id);
+      
+      // Calculate total of existing rubrics (excluding the one being edited if in edit mode)
+      const totalRubricas = rubricas
+        .filter(rub => !editingRubrica || rub.id !== editingRubrica.id)
+        .reduce((sum, rub) => sum + rub.valor, 0);
+      
+      // Check if adding/updating this rubric would exceed the budget
+      if (totalRubricas + valor > selectedOrcamento.valor_total) {
+        const disponivel = selectedOrcamento.valor_total - totalRubricas;
+        setRubricaError(`O valor excede o orçamento disponível. Disponível: €${disponivel.toFixed(2)}`);
+        return;
+      }
+      
+      if (editingRubrica) {
+        // Update existing rubric
+        await rubricasAPI.update(editingRubrica.id, {
+          nome: newRubrica.nome,
+          descricao: newRubrica.descricao,
+          valor: valor,
+          orcamento_id: selectedOrcamento.id
+        });
+      } else {
+        // Create new rubric
+        await rubricasAPI.create({
+          nome: newRubrica.nome,
+          descricao: newRubrica.descricao,
+          valor: valor,
+          orcamento_id: selectedOrcamento.id
+        });
+      }
       
       setShowRubricaModal(false);
-      setNewRubrica({ nome: '', descricao: '' });
+      setNewRubrica({ nome: '', descricao: '', valor: '' });
+      setRubricaError('');
+      setEditingRubrica(null);
       await fetchData();
       
       // Refresh selected orcamento
       const updatedOrcamento = await orcamentosAPI.getById(selectedOrcamento.id);
       setSelectedOrcamento(updatedOrcamento);
     } catch (error) {
-      console.error('Error creating rubrica:', error);
+      console.error('Error saving rubrica:', error);
+      setRubricaError(`Ocorreu um erro ao ${editingRubrica ? 'atualizar' : 'criar'} a rubrica. Por favor, tente novamente.`);
     }
   };
 
@@ -103,6 +143,32 @@ const Orcamentos: React.FC = () => {
         await fetchData();
       } catch (error) {
         console.error('Error deleting orcamento:', error);
+      }
+    }
+  };
+
+  const handleEditRubrica = (rubrica: Rubrica) => {
+    setEditingRubrica(rubrica);
+    setNewRubrica({
+      nome: rubrica.nome,
+      descricao: rubrica.descricao || '',
+      valor: rubrica.valor.toString()
+    });
+    setShowRubricaModal(true);
+  };
+
+  const handleDeleteRubrica = async (rubricaId: string) => {
+    if (confirm('Tem certeza que deseja apagar esta rubrica? Esta ação não pode ser desfeita.')) {
+      try {
+        await rubricasAPI.delete(rubricaId);
+        if (selectedOrcamento) {
+          const updatedOrcamento = await orcamentosAPI.getById(selectedOrcamento.id);
+          setSelectedOrcamento(updatedOrcamento);
+          await fetchData();
+        }
+      } catch (error) {
+        console.error('Error deleting rubrica:', error);
+        alert('Ocorreu um erro ao apagar a rubrica. Por favor, tente novamente.');
       }
     }
   };
@@ -385,11 +451,42 @@ const Orcamentos: React.FC = () => {
               {selectedOrcamento.rubricas && selectedOrcamento.rubricas.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {selectedOrcamento.rubricas.map((rubrica) => (
-                    <div key={rubrica.id} className="border border-gray-200 rounded-lg p-4">
-                      <h4 className="font-medium text-gray-900">{rubrica.nome}</h4>
-                      {rubrica.descricao && (
-                        <p className="text-sm text-gray-600 mt-1">{rubrica.descricao}</p>
-                      )}
+                    <div key={rubrica.id} className="border border-gray-200 rounded-lg p-4 relative group">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-medium text-gray-900">{rubrica.nome}</h4>
+                          <p className="text-lg font-semibold text-blue-600 mt-1">
+                            {rubrica.valor.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                          </p>
+                          {rubrica.descricao && (
+                            <p className="text-sm text-gray-600 mt-1">{rubrica.descricao}</p>
+                          )}
+                        </div>
+                        {canCreateOrcamento && (
+                          <div className="flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditRubrica(rubrica);
+                              }}
+                              className="text-blue-600 hover:text-blue-800 p-1"
+                              title="Editar rubrica"
+                            >
+                              <Edit size={16} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteRubrica(rubrica.id);
+                              }}
+                              className="text-red-600 hover:text-red-800 p-1"
+                              title="Apagar rubrica"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -408,9 +505,25 @@ const Orcamentos: React.FC = () => {
       {showRubricaModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Nova Rubrica</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingRubrica ? 'Editar Rubrica' : 'Nova Rubrica'}
+            </h2>
             
             <form onSubmit={handleCreateRubrica} className="space-y-4">
+              {/* Error message */}
+              {rubricaError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <AlertCircle className="h-5 w-5 text-red-500" />
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-red-700">{rubricaError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nome
@@ -427,6 +540,22 @@ const Orcamentos: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Valor (€)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={newRubrica.valor}
+                  onChange={(e) => setNewRubrica({ ...newRubrica, valor: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Valor alocado"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Descrição
                 </label>
                 <textarea
@@ -437,19 +566,32 @@ const Orcamentos: React.FC = () => {
                   placeholder="Descrição da rubrica..."
                 />
               </div>
+              
+              {selectedOrcamento && (
+                <div className="text-sm text-gray-500 space-y-1">
+                  <p>Orçamento total: €{selectedOrcamento.valor_total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p>Já alocado: €{selectedOrcamento.rubricas?.reduce((sum, rub) => sum + rub.valor, 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}</p>
+                  <p className="font-medium">Disponível: €{(
+                    selectedOrcamento.valor_total - 
+                    (selectedOrcamento.rubricas?.reduce((sum, rub) => sum + rub.valor, 0) || 0)
+                  ).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+              )}
 
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-md transition-colors"
                 >
-                  Criar Rubrica
+                  {editingRubrica ? 'Atualizar Rubrica' : 'Criar Rubrica'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setShowRubricaModal(false);
-                    setNewRubrica({ nome: '', descricao: '' });
+                    setNewRubrica({ nome: '', descricao: '', valor: '' });
+                    setRubricaError('');
+                    setEditingRubrica(null);
                   }}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-md transition-colors"
                 >

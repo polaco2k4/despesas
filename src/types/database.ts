@@ -35,6 +35,7 @@ export interface Rubrica {
   id: string;
   nome: string;
   descricao: string | null;
+  valor: number;
   orcamento_id: string;
   created_at: string;
   updated_at: string;
