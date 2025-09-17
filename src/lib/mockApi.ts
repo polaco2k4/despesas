@@ -271,16 +271,29 @@ export const despesasAPI = {
     let despesas = [...mockDespesas];
     
     // Apply user role filtering
-    if (currentUser?.role === 'colaborador') {
-      despesas = despesas.filter(d => d.usuario_id === currentUser.id);
-    } else if (currentUser?.role === 'gestor') {
-      // Gestor can see expenses from their department
-      const userRubricas = mockRubricas.filter(r => {
-        const orcamento = mockOrcamentos.find(o => o.id === r.orcamento_id);
-        return orcamento?.departamento_id === currentUser.departamento_id;
-      });
-      const rubricaIds = userRubricas.map(r => r.id);
-      despesas = despesas.filter(d => rubricaIds.includes(d.rubrica_id));
+    if (currentUser) {
+      if (currentUser.role === 'colaborador') {
+        // Colaborador can see all expenses from their department
+        const userDepartment = currentUser.departamento_id;
+        if (userDepartment) {
+          // Get all rubricas from the user's department
+          const departmentRubricas = mockRubricas.filter(rubrica => {
+            const orcamento = mockOrcamentos.find(o => o.id === rubrica.orcamento_id);
+            return orcamento?.departamento_id === userDepartment;
+          });
+          const rubricaIds = departmentRubricas.map(r => r.id);
+          despesas = despesas.filter(d => rubricaIds.includes(d.rubrica_id));
+        }
+      } else if (currentUser.role === 'gestor') {
+        // Gestor can see expenses from their department
+        const userRubricas = mockRubricas.filter(r => {
+          const orcamento = mockOrcamentos.find(o => o.id === r.orcamento_id);
+          return orcamento?.departamento_id === currentUser.departamento_id;
+        });
+        const rubricaIds = userRubricas.map(r => r.id);
+        despesas = despesas.filter(d => rubricaIds.includes(d.rubrica_id));
+      }
+      // Admin can see all expenses
     }
     
     // Apply additional filters
