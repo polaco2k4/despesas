@@ -34,6 +34,15 @@ const Despesas: React.FC = () => {
   });
   
   const [fornecedores, setFornecedores] = useState<Array<{id: string, nome: string}>>([]);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingDespesa, setEditingDespesa] = useState<Omit<Despesa, 'id' | 'created_at' | 'updated_at' | 'status'> & { id?: string }>({
+    rubrica_id: '',
+    descricao: '',
+    valor: 0,
+    anexo_url: null,
+    usuario_id: '',
+    fornecedor_id: ''
+  });
 
   useEffect(() => {
     fetchData();
@@ -171,6 +180,45 @@ const Despesas: React.FC = () => {
     }
   };
 
+  const handleEditDespesa = (despesa: Despesa) => {
+    setEditingDespesa({
+      rubrica_id: despesa.rubrica_id,
+      descricao: despesa.descricao,
+      valor: despesa.valor,
+      anexo_url: despesa.anexo_url,
+      usuario_id: despesa.usuario_id,
+      fornecedor_id: despesa.fornecedor_id || ''
+    });
+    setSelectedDespesa(despesa);
+    setIsEditing(true);
+  };
+
+  const handleUpdateDespesa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedDespesa) return;
+    
+    try {
+      const despesaData = {
+        rubrica_id: editingDespesa.rubrica_id,
+        descricao: editingDespesa.descricao,
+        valor: editingDespesa.valor,
+        fornecedor_id: editingDespesa.fornecedor_id,
+        anexo_url: editingDespesa.anexo_url,
+        // Resetar o status para 'pendente' quando uma despesa rejeitada for editada
+        status: 'pendente' as const
+      };
+
+      await despesasAPI.update(selectedDespesa.id, despesaData);
+      
+      setIsEditing(false);
+      setShowDetailModal(false);
+      await fetchData();
+    } catch (error) {
+      console.error('Error updating despesa:', error);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'aprovada':
@@ -271,6 +319,9 @@ const Despesas: React.FC = () => {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nº Documento
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Descrição
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -296,13 +347,16 @@ const Despesas: React.FC = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredDespesas.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     Nenhuma despesa encontrada
                   </td>
                 </tr>
               ) : (
                 filteredDespesas.map((despesa) => (
                   <tr key={despesa.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                      {despesa.id}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
                         {despesa.descricao}
@@ -535,122 +589,218 @@ const Despesas: React.FC = () => {
         </div>
       )}
 
-      {/* Detail Modal */}
-      {showDetailModal && selectedDespesa && (
+      {/* Detail/Edit Modal */}
+      {(showDetailModal && selectedDespesa) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Detalhes da Despesa</h2>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {isEditing ? 'Editar Despesa' : 'Detalhes da Despesa'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">Nº Documento: {selectedDespesa.id}</p>
+              </div>
               <button
-                onClick={() => setShowDetailModal(false)}
+                onClick={() => {
+                  setShowDetailModal(false);
+                  setIsEditing(false);
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <XCircle size={24} />
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            {isEditing ? (
+              <form onSubmit={handleUpdateDespesa} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Valor</label>
-                  <p className="text-lg font-semibold text-gray-900">Kz {selectedDespesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={editingDespesa.descricao}
+                    onChange={(e) => setEditingDespesa({...editingDespesa, descricao: e.target.value})}
+                    required
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedDespesa.status)}`}>
-                    {getStatusText(selectedDespesa.status)}
-                  </span>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Valor
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editingDespesa.valor}
+                      onChange={(e) => setEditingDespesa({...editingDespesa, valor: parseFloat(e.target.value)})}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fornecedor
+                    </label>
+                    <select
+                      value={editingDespesa.fornecedor_id}
+                      onChange={(e) => setEditingDespesa({...editingDespesa, fornecedor_id: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecionar fornecedor</option>
+                      {fornecedores.map((fornecedor) => (
+                        <option key={fornecedor.id} value={fornecedor.id}>
+                          {fornecedor.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Descrição</label>
-                <p className="text-gray-900">{selectedDespesa.descricao}</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Solicitante</label>
-                  <p className="text-gray-900">{selectedDespesa.usuario?.nome}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Rubrica</label>
-                  <p className="text-gray-900">{selectedDespesa.rubrica?.nome}</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Data de Criação</label>
-                <p className="text-gray-900">{new Date(selectedDespesa.created_at).toLocaleString('pt-PT')}</p>
-              </div>
-
-              {selectedDespesa.anexo_url && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Anexo</label>
-                  <a 
-                    href={selectedDespesa.anexo_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-700 flex items-center space-x-2"
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                   >
-                    <FileText size={16} />
-                    <span>Ver anexo</span>
-                  </a>
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                  >
+                    Salvar Alterações
+                  </button>
                 </div>
-              )}
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Valor</label>
+                    <p className="text-lg font-semibold text-gray-900">Kz {selectedDespesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedDespesa.status)}`}>
+                      {getStatusText(selectedDespesa.status)}
+                    </span>
+                  </div>
+                </div>
 
-              {/* Aprovações */}
-              {selectedDespesa.aprovacoes && selectedDespesa.aprovacoes.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Histórico de Aprovações</label>
-                  <div className="space-y-2">
-                    {selectedDespesa.aprovacoes.map((aprovacao) => (
-                      <div key={aprovacao.id} className="bg-gray-50 p-3 rounded-md">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-medium text-gray-900">{aprovacao.aprovador?.nome}</p>
-                            <p className="text-sm text-gray-600">{aprovacao.role}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(aprovacao.status)}`}>
-                              {getStatusText(aprovacao.status)}
-                            </span>
-                            <p className="text-sm text-gray-600">
-                              {new Date(aprovacao.aprovado_em).toLocaleString('pt-PT')}
-                            </p>
-                          </div>
-                        </div>
-                        {aprovacao.comentario && (
-                          <p className="mt-2 text-sm text-gray-700">{aprovacao.comentario}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700">Descrição</label>
+                  <p className="text-gray-900">{selectedDespesa.descricao}</p>
                 </div>
-              )}
 
-              {/* Approval Actions */}
-              {canApprove && selectedDespesa.status === 'pendente' && (
-                <div className="border-t pt-4">
-                  <div className="flex space-x-3">
-                    <button
-                      onClick={() => handleApproval(selectedDespesa.id, 'aprovada')}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
-                    >
-                      <CheckCircle size={20} />
-                      <span>Aprovar</span>
-                    </button>
-                    <button
-                      onClick={() => handleApproval(selectedDespesa.id, 'negada')}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
-                    >
-                      <XCircle size={20} />
-                      <span>Rejeitar</span>
-                    </button>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Solicitante</label>
+                    <p className="text-gray-900">{selectedDespesa.usuario?.nome}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Rubrica</label>
+                    <p className="text-gray-900">{selectedDespesa.rubrica?.nome}</p>
                   </div>
                 </div>
-              )}
-            </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Fornecedor</label>
+                  <p className="text-gray-900">
+                    {selectedDespesa.fornecedor_id ? 
+                      (fornecedores.find(f => f.id === selectedDespesa.fornecedor_id)?.nome || 'N/A') : 
+                      'Não especificado'}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Data de Criação</label>
+                  <p className="text-gray-900">{new Date(selectedDespesa.created_at).toLocaleString('pt-PT')}</p>
+                </div>
+
+                {selectedDespesa.anexo_url && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Anexo</label>
+                    <a 
+                      href={selectedDespesa.anexo_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-700 flex items-center space-x-2"
+                    >
+                      <FileText size={16} />
+                      <span>Ver anexo</span>
+                    </a>
+                  </div>
+                )}
+
+                {/* Ações do usuário */}
+                {userProfile?.id === selectedDespesa.usuario_id && 
+                 ['pendente', 'rejeitada'].includes(selectedDespesa.status) && (
+                  <div className="pt-4 border-t">
+                    <button
+                      onClick={() => handleEditDespesa(selectedDespesa)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
+                    >
+                      Editar Despesa
+                    </button>
+                  </div>
+                )}
+
+                {/* Aprovações */}
+                {selectedDespesa.aprovacoes && selectedDespesa.aprovacoes.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Histórico de Aprovações</label>
+                    <div className="space-y-2">
+                      {selectedDespesa.aprovacoes.map((aprovacao) => (
+                        <div key={aprovacao.id} className="bg-gray-50 p-3 rounded-md">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-gray-900">{aprovacao.aprovador?.nome}</p>
+                              <p className="text-sm text-gray-600">{aprovacao.role}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(aprovacao.status)}`}>
+                                {getStatusText(aprovacao.status)}
+                              </span>
+                              <p className="text-sm text-gray-600">
+                                {new Date(aprovacao.aprovado_em).toLocaleString('pt-PT')}
+                              </p>
+                            </div>
+                          </div>
+                          {aprovacao.comentario && (
+                            <p className="mt-2 text-sm text-gray-700">{aprovacao.comentario}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Approval Actions */}
+                {canApprove && selectedDespesa.status === 'pendente' && (
+                  <div className="border-t pt-4">
+                    <div className="flex space-x-3">
+                      <button
+                        onClick={() => handleApproval(selectedDespesa.id, 'aprovada')}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
+                      >
+                        <CheckCircle size={20} />
+                        <span>Aprovar</span>
+                      </button>
+                      <button
+                        onClick={() => handleApproval(selectedDespesa.id, 'negada')}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
+                      >
+                        <XCircle size={20} />
+                        <span>Rejeitar</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

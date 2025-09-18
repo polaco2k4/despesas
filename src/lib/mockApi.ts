@@ -345,19 +345,53 @@ export const despesasAPI = {
 
   create: async (despesa: Omit<Despesa, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<Despesa> => {
     await delay();
+    
+    // Encontrar a rubrica da despesa
+    const rubrica = mockRubricas.find(r => r.id === despesa.rubrica_id);
+    if (!rubrica) throw new Error('Rubrica não encontrada');
+    
+    // Encontrar o orçamento da rubrica
+    const orcamento = mockOrcamentos.find(o => o.id === rubrica.orcamento_id);
+    if (!orcamento) throw new Error('Orçamento não encontrado');
+    
+    // Encontrar o departamento
+    const departamento = mockDepartamentos.find(d => d.id === orcamento.departamento_id);
+    if (!departamento) throw new Error('Departamento não encontrado');
+    
+    // Gerar a sigla do departamento (3 primeiras letras em maiúsculas)
+    const sigla = departamento.nome.substring(0, 3).toUpperCase();
+    
+    // Obter o ano atual
+    const ano = new Date().getFullYear();
+    
+    // Encontrar o próximo número sequencial para este departamento/ano
+    const sequencial = mockDespesas
+      .filter(d => {
+        if (!d.id.includes('/')) return false;
+        const [num, dep, yr] = d.id.split('/');
+        return dep === sigla && yr === ano.toString();
+      })
+      .length + 1;
+    
+    // Formatar o número sequencial com 3 dígitos
+    const numeroFormatado = sequencial.toString().padStart(3, '0');
+    
+    // Criar o novo ID no formato XXX/SIGLA/YYYY
+    const novoId = `${numeroFormatado}/${sigla}/${ano}`;
+    
     const newDespesa: Despesa = {
       ...despesa,
-      id: `desp-${Date.now()}`,
+      id: novoId,
       status: 'pendente',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-    mockDespesas.push(newDespesa);
     
+    mockDespesas.push(newDespesa);
     return {
       ...newDespesa,
-      usuario: mockUsuarios.find(u => u.id === newDespesa.usuario_id),
-      rubrica: mockRubricas.find(r => r.id === newDespesa.rubrica_id),
+      rubrica,
+      usuario: mockUsuarios.find(u => u.id === despesa.usuario_id),
       aprovacoes: []
     };
   },

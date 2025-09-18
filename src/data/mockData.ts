@@ -228,7 +228,7 @@ export const mockRubricas: Rubrica[] = [
 
 export const mockDespesas: Despesa[] = [
   {
-    id: 'desp-1',
+    id: '001/FIN/2024',
     rubrica_id: 'rub-3',
     usuario_id: 'user-4',
     descricao: 'Compra de papel e canetas para o escritório',
@@ -241,7 +241,7 @@ export const mockDespesas: Despesa[] = [
     usuario: mockUsuarios[3]
   },
   {
-    id: 'desp-2',
+    id: '001/TI/2024',
     rubrica_id: 'rub-8',
     usuario_id: 'user-5',
     descricao: 'Licença anual do software de desenvolvimento',
@@ -254,7 +254,7 @@ export const mockDespesas: Despesa[] = [
     usuario: mockUsuarios[4]
   },
   {
-    id: 'desp-3',
+    id: '001/MAR/2024',
     rubrica_id: 'rub-4',
     usuario_id: 'user-3',
     descricao: 'Campanha publicitária no Google Ads',
@@ -267,7 +267,7 @@ export const mockDespesas: Despesa[] = [
     usuario: mockUsuarios[2]
   },
   {
-    id: 'desp-4',
+    id: '002/FIN/2024',
     rubrica_id: 'rub-2',
     usuario_id: 'user-2',
     descricao: 'Consultoria em auditoria financeira',
@@ -280,7 +280,7 @@ export const mockDespesas: Despesa[] = [
     usuario: mockUsuarios[1]
   },
   {
-    id: 'desp-5',
+    id: '002/MAR/2024',
     rubrica_id: 'rub-5',
     usuario_id: 'user-3',
     descricao: 'Organização da conferência anual',
@@ -297,7 +297,7 @@ export const mockDespesas: Despesa[] = [
 export const mockAprovacoes: Aprovacao[] = [
   {
     id: 'apr-1',
-    despesa_id: 'desp-2',
+    despesa_id: '001/TI/2024',
     aprovado_por: 'user-1',
     role: 'admin',
     status: 'aprovada',
@@ -308,7 +308,7 @@ export const mockAprovacoes: Aprovacao[] = [
   },
   {
     id: 'apr-2',
-    despesa_id: 'desp-4',
+    despesa_id: '002/FIN/2024',
     aprovado_por: 'user-1',
     role: 'admin',
     status: 'aprovada',
@@ -319,7 +319,7 @@ export const mockAprovacoes: Aprovacao[] = [
   },
   {
     id: 'apr-3',
-    despesa_id: 'desp-5',
+    despesa_id: '002/MAR/2024',
     aprovado_por: 'user-1',
     role: 'admin',
     status: 'negada',

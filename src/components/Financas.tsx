@@ -17,7 +17,8 @@ import {
   BarChart3,
   PieChart,
   CalendarDays,
-  FilterX
+  FilterX,
+  Eye
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -46,6 +47,7 @@ const Financas: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -921,6 +923,16 @@ const Financas: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
+                            onClick={() => {
+                              setSelectedDespesa(despesa);
+                              setShowDetailsModal(true);
+                            }}
+                            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            Detalhes
+                          </button>
+                          <button
                             onClick={() => handlePagarDespesa(despesa.id)}
                             disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
                             className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white ${
@@ -963,6 +975,184 @@ const Financas: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Details Modal */}
+      {showDetailsModal && selectedDespesa && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">Detalhes da Despesa</h3>
+                  <p className="text-sm text-gray-500 mt-1">ID: {selectedDespesa.id}</p>
+                </div>
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                >
+                  <span className="sr-only">Fechar</span>
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Descrição</h4>
+                  <p className="mt-1 text-sm text-gray-900">{selectedDespesa.descricao}</p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Valor</h4>
+                  <p className="mt-1 text-sm font-medium text-gray-900">
+                    {formatCurrency(selectedDespesa.valor)}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Data de Criação</h4>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {formatDate(selectedDespesa.created_at)}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Status</h4>
+                  <span className={`mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    selectedDespesa.status === 'paga' 
+                      ? 'bg-green-100 text-green-800' 
+                      : selectedDespesa.status === 'negada' 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {selectedDespesa.status === 'paga' 
+                      ? 'Pago' 
+                      : selectedDespesa.status === 'negada' 
+                        ? 'Negado' 
+                        : 'Pendente'}
+                  </span>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Rubrica</h4>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedDespesa.rubrica?.nome || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Departamento</h4>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedDespesa.usuario?.departamento?.nome || 'N/A'}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500">Criado por</h4>
+                  <p className="mt-1 text-sm text-gray-900">
+                    {selectedDespesa.usuario?.nome || 'N/A'}
+                    {selectedDespesa.usuario?.email && (
+                      <span className="block text-xs text-gray-500">{selectedDespesa.usuario.email}</span>
+                    )}
+                  </p>
+                </div>
+                {selectedDespesa.anexo_url && (
+                  <div className="md:col-span-2">
+                    <h4 className="text-sm font-medium text-gray-500">Anexo</h4>
+                    <a 
+                      href={selectedDespesa.anexo_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      <FileText className="h-4 w-4 mr-1" />
+                      Ver anexo
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-8">
+                <h4 className="text-sm font-medium text-gray-500 mb-4">Histórico de Aprovações e Pagamentos</h4>
+                {selectedDespesa.aprovacoes && selectedDespesa.aprovacoes.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Show creator info first */}
+                    <div className="border-l-4 border-blue-200 pl-4 py-2 bg-blue-50 rounded-r">
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm font-medium text-gray-900">
+                          {selectedDespesa.usuario?.nome || 'Sistema'}
+                          <span className="text-xs font-normal text-gray-500 ml-2">(Criador)</span>
+                        </p>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Criado
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {new Date(selectedDespesa.created_at).toLocaleString('pt-AO')}
+                      </p>
+                    </div>
+                    
+                    {/* Show approval/rejection history */}
+                    {selectedDespesa.aprovacoes.map((aprovacao, idx) => {
+                      const isPayment = aprovacao.status === 'paga';
+                      const isRejection = aprovacao.status === 'negada';
+                      const isApproval = aprovacao.status === 'aprovada';
+                      
+                      return (
+                        <div 
+                          key={idx} 
+                          className={`border-l-4 pl-4 py-2 rounded-r ${
+                            isPayment 
+                              ? 'border-green-200 bg-green-50' 
+                              : isRejection 
+                                ? 'border-red-200 bg-red-50' 
+                                : 'border-yellow-200 bg-yellow-50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <p className="text-sm font-medium text-gray-900">
+                              {aprovacao.aprovador?.nome || 'Sistema'}
+                              <span className="text-xs font-normal text-gray-500 ml-2">
+                                ({aprovacao.role === 'gestor' ? 'Gestor' : 'Financeiro'})
+                              </span>
+                            </p>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              isPayment 
+                                ? 'bg-green-100 text-green-800' 
+                                : isRejection 
+                                  ? 'bg-red-100 text-red-800' 
+                                  : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {isPayment 
+                                ? 'Pagamento Efetuado' 
+                                : isRejection 
+                                  ? 'Rejeitado' 
+                                  : 'Aprovado'}
+                            </span>
+                          </div>
+                          {aprovacao.comentario && (
+                            <p className="mt-1 text-sm text-gray-600">
+                              <span className="font-medium">Comentário:</span> {aprovacao.comentario}
+                            </p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-500">
+                            {new Date(aprovacao.aprovado_em).toLocaleString('pt-AO')}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Nenhum histórico de aprovação disponível.</p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowDetailsModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rejection Modal */}
       {showRejectionModal && selectedDespesa && (
