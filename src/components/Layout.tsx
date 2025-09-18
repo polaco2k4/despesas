@@ -13,7 +13,8 @@ import {
   Building2,
   PiggyBank,
   Receipt,
-  Truck
+  Truck,
+  DollarSign
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -37,6 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onPageChange }) 
     { id: 'usuarios', label: 'Utilizadores', icon: Users, roles: ['admin'] },
     { id: 'orcamentos', label: 'Orçamentos', icon: PiggyBank, roles: ['admin', 'gestor'] },
     { id: 'despesas', label: 'Despesas', icon: Receipt, roles: ['admin', 'gestor', 'colaborador'] },
+    { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
     { id: 'fornecedores', label: 'Fornecedores', icon: Truck, roles: ['admin', 'gestor'] },
     { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor'] },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador'] },
@@ -244,7 +246,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onPageChange }) 
         {/* Footer */}
         <footer className="bg-white border-t border-gray-100 px-6 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
-            <div>© {new Date().getFullYear()} BudgetFlow - Sistema de Gestão Orçamental</div>
+            <div> BudgetFlow - Sistema de Gestão Orçamental</div>
             <div className="mt-2 md:mt-0">
               <span className="inline-flex items-center">
                 <span className="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></span>

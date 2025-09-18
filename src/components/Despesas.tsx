@@ -145,7 +145,7 @@ const Despesas: React.FC = () => {
     }
   };
 
-  const handleApproval = async (despesaId: string, status: 'aprovada' | 'rejeitada', comentario?: string) => {
+  const handleApproval = async (despesaId: string, status: 'aprovada' | 'negada', comentario?: string) => {
     try {
       await aprovacoesAPI.create({
         despesa_id: despesaId,
@@ -173,8 +173,9 @@ const Despesas: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'aprovada': return 'text-green-600 bg-green-50';
-      case 'rejeitada': return 'text-red-600 bg-red-50';
+      case 'aprovada':
+      case 'paga': return 'text-green-600 bg-green-50';
+      case 'negada': return 'text-red-600 bg-red-50';
       case 'pendente': return 'text-yellow-600 bg-yellow-50';
       default: return 'text-gray-600 bg-gray-50';
     }
@@ -183,7 +184,8 @@ const Despesas: React.FC = () => {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'aprovada': return 'Aprovada';
-      case 'rejeitada': return 'Rejeitada';
+      case 'paga': return 'Paga';
+      case 'negada': return 'Negada';
       case 'pendente': return 'Pendente';
       default: return status;
     }
@@ -639,7 +641,7 @@ const Despesas: React.FC = () => {
                       <span>Aprovar</span>
                     </button>
                     <button
-                      onClick={() => handleApproval(selectedDespesa.id, 'rejeitada')}
+                      onClick={() => handleApproval(selectedDespesa.id, 'negada')}
                       className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
                     >
                       <XCircle size={20} />

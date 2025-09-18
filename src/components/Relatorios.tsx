@@ -16,7 +16,7 @@ import {
   LineChart as LineChartIcon,
   PieChart as PieChartIcon
 } from 'lucide-react';
-import { Chart as ChartJS, registerables, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import jsPDF from 'jspdf';
@@ -241,10 +241,10 @@ const Relatorios: React.FC = () => {
 
   const getStatusStats = () => {
     const pendentes = filteredDespesas.filter(d => d.status === 'pendente').length;
-    const aprovadas = filteredDespesas.filter(d => d.status === 'aprovada').length;
-    const rejeitadas = filteredDespesas.filter(d => d.status === 'rejeitada').length;
+    const aprovadas = filteredDespesas.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
+    const negadas = filteredDespesas.filter(d => d.status === 'negada').length;
     
-    return { pendentes, aprovadas, rejeitadas };
+    return { pendentes, aprovadas, negadas };
   };
 
   const getDepartmentStats = () => {
@@ -274,9 +274,9 @@ const Relatorios: React.FC = () => {
 
   // Prepare data for charts
   const statusChartData = {
-    labels: ['Pendentes', 'Aprovadas', 'Rejeitadas'],
+    labels: ['Pendentes', 'Aprovadas', 'Negadas'],
     datasets: [{
-      data: [statusStats.pendentes, statusStats.aprovadas, statusStats.rejeitadas],
+      data: [statusStats.pendentes, statusStats.aprovadas, statusStats.negadas],
       backgroundColor: ['#F59E0B', '#10B981', '#EF4444'],
       borderWidth: 1,
     }]
@@ -354,8 +354,9 @@ const Relatorios: React.FC = () => {
   const totalDespesas = filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
   const utilizacao = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
   const totalPendentes = filteredDespesas.filter(d => d.status === 'pendente').length;
-  const totalAprovadas = filteredDespesas.filter(d => d.status === 'aprovada').length;
-  const totalRejeitadas = filteredDespesas.filter(d => d.status === 'rejeitada').length;
+  const totalAprovadas = filteredDespesas.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const totalNegadas = filteredDespesas.filter(d => d.status === 'negada').length;
 
   if (loading) {
     return (
@@ -426,7 +427,8 @@ const Relatorios: React.FC = () => {
               <option value="">Todos os status</option>
               <option value="pendente">Pendente</option>
               <option value="aprovada">Aprovada</option>
-              <option value="rejeitada">Rejeitada</option>
+              <option value="paga">Paga</option>
+              <option value="negada">Negada</option>
             </select>
           </div>
 
@@ -532,7 +534,7 @@ const Relatorios: React.FC = () => {
                   <CheckCircle2 className="h-3 w-3 mr-1" /> {totalAprovadas}
                 </span>
                 <span className="text-xs text-red-600 flex items-center">
-                  <XCircle className="h-3 w-3 mr-1" /> {totalRejeitadas}
+                  <XCircle className="h-3 w-3 mr-1" /> {totalNegadas}
                 </span>
               </div>
             </div>
@@ -549,7 +551,7 @@ const Relatorios: React.FC = () => {
               ></div>
               <div 
                 className="bg-red-500 h-1.5 rounded-full -mt-1.5" 
-                style={{ width: `${(totalRejeitadas / filteredDespesas.length) * 100 || 0}%` }}
+                style={{ width: `${(totalNegadas / filteredDespesas.length) * 100 || 0}%` }}
               ></div>
             </div>
           </div>
@@ -598,7 +600,7 @@ const Relatorios: React.FC = () => {
                   ...chartOptions.plugins,
                   tooltip: {
                     callbacks: {
-                      label: (context) => `Kz ${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      label: (context: any) => `Kz ${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     }
                   }
                 },
@@ -806,12 +808,13 @@ const Relatorios: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        despesa.status === 'aprovada' ? 'text-green-600 bg-green-50' :
-                        despesa.status === 'rejeitada' ? 'text-red-600 bg-red-50' :
+                        despesa.status === 'aprovada' || despesa.status === 'paga' ? 'text-green-600 bg-green-50' :
+                        despesa.status === 'negada' ? 'text-red-600 bg-red-50' :
                         'text-yellow-600 bg-yellow-50'
                       }`}>
                         {despesa.status === 'aprovada' ? 'Aprovada' :
-                         despesa.status === 'rejeitada' ? 'Rejeitada' : 'Pendente'}
+                         despesa.status === 'paga' ? 'Paga' :
+                         despesa.status === 'negada' ? 'Negada' : 'Pendente'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">

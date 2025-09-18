@@ -8,11 +8,8 @@ import Orcamentos from './components/Orcamentos';
 import Fornecedores from './components/Fornecedores';
 import Relatorios from './components/Relatorios';
 import Configuracoes from './components/Configuracoes';
-
-// Import the new Usuarios component
+import Financas from './components/Financas';
 import Usuarios from './components/Usuarios';
-
-// Import the Departamentos component
 import Departamentos from './components/Departamentos';
 
 const AppContent: React.FC = () => {
@@ -43,6 +40,8 @@ const AppContent: React.FC = () => {
         return <Orcamentos />;
       case 'despesas':
         return <Despesas />;
+      case 'financas':
+        return <Financas />;
       case 'fornecedores':
         return <Fornecedores />;
       case 'relatorios':
@@ -61,12 +60,12 @@ const AppContent: React.FC = () => {
   );
 };
 
-function App() {
+const App: React.FC = () => {
   return (
     <AuthProvider>
       <AppContent />
     </AuthProvider>
   );
-}
+};
 
 export default App;

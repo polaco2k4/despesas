@@ -503,18 +503,20 @@ export const dashboardAPI = {
     }
 
     const totalOrcamento = orcamentos.reduce((sum, o) => sum + o.valor_total, 0);
-    const totalDespesas = despesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
-    const despesasPendentes = despesas.filter(d => d.status === 'pendente').length;
-    const despesasAprovadas = despesas.filter(d => d.status === 'aprovada').length;
-    const despesasRejeitadas = despesas.filter(d => d.status === 'rejeitada').length;
+    const totalDespesas = despesas.reduce((sum, d) => sum + (d.status === 'aprovada' || d.status === 'paga' ? d.valor : 0), 0);
     const utilizacaoOrcamento = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
+    const totalPago = despesas.filter(d => d.status === 'paga').reduce((sum, d) => sum + d.valor, 0);
+    const totalPendente = despesas.filter(d => d.status === 'pendente').reduce((sum, d) => sum + d.valor, 0);
+    const totalNegado = despesas.filter(d => d.status === 'negada').reduce((sum, d) => sum + d.valor, 0);
+    const totalAprovado = despesas.filter(d => d.status === 'aprovada').reduce((sum, d) => sum + d.valor, 0);
 
     return {
       totalOrcamento,
       totalDespesas,
-      despesasPendentes,
-      despesasAprovadas,
-      despesasRejeitadas,
+      totalPago,
+      totalPendente,
+      totalNegado,
+      totalAprovado,
       utilizacaoOrcamento
     };
   }

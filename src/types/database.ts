@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'gestor' | 'colaborador';
-export type DespesaStatus = 'pendente' | 'aprovada' | 'rejeitada';
-export type AprovacaoStatus = 'aprovada' | 'rejeitada';
+export type DespesaStatus = 'pendente' | 'aprovada' | 'rejeitada' | 'paga' | 'negada';
+export type AprovacaoStatus = 'aprovada' | 'negada';
 
 export interface Departamento {
   id: string;
@@ -52,6 +52,8 @@ export interface Despesa {
   valor: number;
   status: DespesaStatus;
   anexo_url: string | null;
+  data_pagamento?: string | null;
+  motivo_rejeicao?: string | null;
   created_at: string;
   updated_at: string;
   rubrica?: Rubrica;
@@ -74,8 +76,9 @@ export interface Aprovacao {
 export interface DashboardStats {
   totalOrcamento: number;
   totalDespesas: number;
-  despesasPendentes: number;
-  despesasAprovadas: number;
-  despesasRejeitadas: number;
+  totalPago: number;
+  totalPendente: number;
+  totalNegado: number;
+  totalAprovado: number;
   utilizacaoOrcamento: number;
 }

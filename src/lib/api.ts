@@ -7,7 +7,6 @@ import type {
   Despesa, 
   Aprovacao,
   DashboardStats,
-  UserRole,
   DespesaStatus,
   AprovacaoStatus
 } from '../types/database';
@@ -416,10 +415,10 @@ export const dashboardAPI = {
     if (despesasResult.error) throw despesasResult.error;
 
     const totalOrcamento = orcamentosResult.data.reduce((sum, o) => sum + o.valor_total, 0);
-    const totalDespesas = despesasResult.data.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
+    const totalDespesas = despesasResult.data.reduce((sum, d) => sum + (d.status === 'aprovada' || d.status === 'paga' ? d.valor : 0), 0);
     const despesasPendentes = despesasResult.data.filter(d => d.status === 'pendente').length;
-    const despesasAprovadas = despesasResult.data.filter(d => d.status === 'aprovada').length;
-    const despesasRejeitadas = despesasResult.data.filter(d => d.status === 'rejeitada').length;
+    const despesasAprovadas = despesasResult.data.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
+    const despesasNegadas = despesasResult.data.filter(d => d.status === 'negada').length;
     const utilizacaoOrcamento = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
 
     return {
@@ -427,7 +426,7 @@ export const dashboardAPI = {
       totalDespesas,
       despesasPendentes,
       despesasAprovadas,
-      despesasRejeitadas,
+      despesasNegadas,
       utilizacaoOrcamento
     };
   }
