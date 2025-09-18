@@ -28,7 +28,11 @@ const Orcamentos: React.FC = () => {
     ano: new Date().getFullYear() + 1,
     valor_total: ''
   });
-  const [newRubrica, setNewRubrica] = useState({
+  const [newRubrica, setNewRubrica] = useState<{
+    nome: string;
+    descricao: string;
+    valor: string | number;
+  }>({
     nome: '',
     descricao: '',
     valor: ''
@@ -99,7 +103,7 @@ const Orcamentos: React.FC = () => {
       // Check if adding/updating this rubric would exceed the budget
       if (totalRubricas + valor > selectedOrcamento.valor_total) {
         const disponivel = selectedOrcamento.valor_total - totalRubricas;
-        setRubricaError(`O valor excede o orçamento disponível. Disponível: €${disponivel.toFixed(2)}`);
+        setRubricaError(`O valor excede o orçamento disponível. Disponível: Kz ${disponivel.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
         return;
       }
       
@@ -258,7 +262,7 @@ const Orcamentos: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Valor Total</span>
                       <span className="text-xl font-bold text-gray-900">
-                        €{orcamento.valor_total.toLocaleString()}
+                        Kz {orcamento.valor_total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
@@ -342,7 +346,7 @@ const Orcamentos: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor Total (€)
+                  Valor Total (Kz)
                 </label>
                 <input
                   type="number"
@@ -402,7 +406,7 @@ const Orcamentos: React.FC = () => {
                   <div>
                     <p className="text-sm text-blue-600">Valor Total</p>
                     <p className="text-2xl font-bold text-blue-900">
-                      €{selectedOrcamento.valor_total.toLocaleString()}
+                      Kz {selectedOrcamento.valor_total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                 </div>
@@ -456,7 +460,7 @@ const Orcamentos: React.FC = () => {
                         <div>
                           <h4 className="font-medium text-gray-900">{rubrica.nome}</h4>
                           <p className="text-lg font-semibold text-blue-600 mt-1">
-                            {rubrica.valor.toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}
+                            Kz {rubrica.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
                           {rubrica.descricao && (
                             <p className="text-sm text-gray-600 mt-1">{rubrica.descricao}</p>
@@ -528,30 +532,30 @@ const Orcamentos: React.FC = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nome
                 </label>
-                <input
-                  type="text"
-                  value={newRubrica.nome}
-                  onChange={(e) => setNewRubrica({ ...newRubrica, nome: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Nome da rubrica"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor (€)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={newRubrica.valor}
-                  onChange={(e) => setNewRubrica({ ...newRubrica, valor: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Valor alocado"
-                />
+                <div className="space-y-4">
+                  <div>
+                    <input
+                      type="text"
+                      value={newRubrica.nome}
+                      onChange={(e) => setNewRubrica({ ...newRubrica, nome: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nome da rubrica"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newRubrica.valor || ''}
+                      onChange={(e) => setNewRubrica({ ...newRubrica, valor: parseFloat(e.target.value) || 0 })}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Valor alocado (Kz)"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -569,9 +573,9 @@ const Orcamentos: React.FC = () => {
               
               {selectedOrcamento && (
                 <div className="text-sm text-gray-500 space-y-1">
-                  <p>Orçamento total: €{selectedOrcamento.valor_total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  <p>Já alocado: €{selectedOrcamento.rubricas?.reduce((sum, rub) => sum + rub.valor, 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}</p>
-                  <p className="font-medium">Disponível: €{(
+                  <p>Orçamento total: Kz {selectedOrcamento.valor_total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p>Já alocado: Kz {selectedOrcamento.rubricas?.reduce((sum, rub) => sum + rub.valor, 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}</p>
+                  <p className="font-medium">Disponível: Kz {(
                     selectedOrcamento.valor_total - 
                     (selectedOrcamento.rubricas?.reduce((sum, rub) => sum + rub.valor, 0) || 0)
                   ).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>

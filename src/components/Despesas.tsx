@@ -28,7 +28,6 @@ const Despesas: React.FC = () => {
     valor: '',
     anexo: null as File | null,
     fornecedor_id: '',
-    numero_pedido: '',
     valor_orcamento: '',
     orcamento_disponivel: '',
     orcamento_realizado: ''
@@ -108,22 +107,20 @@ const Despesas: React.FC = () => {
     e.preventDefault();
     
     try {
-      const formData = new FormData();
-      formData.append('rubrica_id', newDespesa.rubrica_id);
-      formData.append('usuario_id', userProfile!.id);
-      formData.append('descricao', newDespesa.descricao);
-      formData.append('valor', newDespesa.valor);
-      formData.append('fornecedor_id', newDespesa.fornecedor_id);
-      formData.append('numero_pedido', newDespesa.numero_pedido);
-      formData.append('valor_orcamento', newDespesa.valor_orcamento);
-      formData.append('orcamento_disponivel', newDespesa.orcamento_disponivel);
-      formData.append('orcamento_realizado', newDespesa.orcamento_realizado);
-      
-      if (newDespesa.anexo) {
-        formData.append('anexo', newDespesa.anexo);
-      }
+      const despesaData = {
+        rubrica_id: newDespesa.rubrica_id,
+        usuario_id: userProfile!.id,
+        descricao: newDespesa.descricao,
+        valor: parseFloat(newDespesa.valor),
+        fornecedor_id: newDespesa.fornecedor_id,
+        // Os campos abaixo são apenas para exibição e não precisam ser enviados
+        // valor_orcamento: newDespesa.valor_orcamento,
+        // orcamento_disponivel: newDespesa.orcamento_disponivel,
+        // orcamento_realizado: newDespesa.orcamento_realizado,
+        anexo_url: newDespesa.anexo ? URL.createObjectURL(newDespesa.anexo) : null
+      };
 
-      await despesasAPI.create(formData as any);
+      await despesasAPI.create(despesaData);
       
       setShowCreateModal(false);
       setNewDespesa({ 
@@ -132,7 +129,6 @@ const Despesas: React.FC = () => {
         valor: '', 
         anexo: null,
         fornecedor_id: '',
-        numero_pedido: '',
         valor_orcamento: '',
         orcamento_disponivel: '',
         orcamento_realizado: ''
@@ -311,7 +307,7 @@ const Despesas: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      €{despesa.valor.toLocaleString()}
+                      Kz {despesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {despesa.rubrica?.nome}
@@ -401,7 +397,7 @@ const Despesas: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor (€)
+                  Valor (Kz)
                 </label>
                 <input
                   type="number"
@@ -415,45 +411,29 @@ const Despesas: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número do Pedido
-                  </label>
-                  <input
-                    type="text"
-                    value={newDespesa.numero_pedido}
-                    onChange={(e) => setNewDespesa({ ...newDespesa, numero_pedido: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Número sequencial"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fornecedor
-                  </label>
-                  <select
-                    value={newDespesa.fornecedor_id}
-                    onChange={(e) => setNewDespesa({ ...newDespesa, fornecedor_id: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Selecionar fornecedor</option>
-                    {fornecedores.map((fornecedor) => (
-                      <option key={fornecedor.id} value={fornecedor.id}>
-                        {fornecedor.nome}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Fornecedor
+                </label>
+                <select
+                  value={newDespesa.fornecedor_id}
+                  onChange={(e) => setNewDespesa({ ...newDespesa, fornecedor_id: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Selecionar fornecedor</option>
+                  {fornecedores.map((fornecedor) => (
+                    <option key={fornecedor.id} value={fornecedor.id}>
+                      {fornecedor.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Valor do Orçamento (€)
+                    Valor do Orçamento (Kz)
                   </label>
                   <input
                     type="number"
@@ -469,7 +449,7 @@ const Despesas: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Orçamento Disponível (€)
+                    Orçamento Disponível (Kz)
                   </label>
                   <input
                     type="number"
@@ -485,7 +465,7 @@ const Despesas: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Orçamento Realizado (€)
+                    Orçamento Realizado (Kz)
                   </label>
                   <input
                     type="number"
@@ -538,7 +518,6 @@ const Despesas: React.FC = () => {
                       valor: '', 
                       anexo: null,
                       fornecedor_id: '',
-                      numero_pedido: '',
                       valor_orcamento: '',
                       orcamento_disponivel: '',
                       orcamento_realizado: ''
@@ -572,7 +551,7 @@ const Despesas: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Valor</label>
-                  <p className="text-lg font-semibold text-gray-900">€{selectedDespesa.valor.toLocaleString()}</p>
+                  <p className="text-lg font-semibold text-gray-900">Kz {selectedDespesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Status</label>

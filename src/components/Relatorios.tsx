@@ -201,9 +201,9 @@ const Relatorios: React.FC = () => {
     yPos += 10;
     
     doc.setFontSize(10);
-    doc.text(`Orçamento Total: €${totalOrcamento.toLocaleString()}`, 20, yPos);
+    doc.text(`Orçamento Total: Kz ${totalOrcamento.toLocaleString()}`, 20, yPos);
     yPos += 5;
-    doc.text(`Despesas Aprovadas: €${totalDespesas.toLocaleString()}`, 20, yPos);
+    doc.text(`Despesas Aprovadas: Kz ${totalDespesas.toLocaleString()}`, 20, yPos);
     yPos += 5;
     doc.text(`Taxa de Utilização: ${utilizacao.toFixed(1)}%`, 20, yPos);
     yPos += 5;
@@ -220,7 +220,7 @@ const Relatorios: React.FC = () => {
         despesa.descricao,
         despesa.usuario?.nome || '',
         despesa.rubrica?.nome || '',
-        `€${despesa.valor.toLocaleString()}`,
+        `Kz ${despesa.valor.toLocaleString()}`,
         despesa.status,
         new Date(despesa.created_at).toLocaleDateString('pt-PT')
       ]);
@@ -294,7 +294,7 @@ const Relatorios: React.FC = () => {
   const monthlyChartData = {
     labels: meses,
     datasets: [{
-      label: 'Despesas por Mês (€)',
+      label: 'Despesas por Mês (Kz)',
       data: monthlyExpenses,
       backgroundColor: 'rgba(59, 130, 246, 0.5)',
       borderColor: 'rgba(59, 130, 246, 1)',
@@ -308,7 +308,7 @@ const Relatorios: React.FC = () => {
   const departmentChartData = {
     labels: departmentStats.map(dept => dept.nome),
     datasets: [{
-      label: 'Despesas por Departamento (€)',
+      label: 'Despesas por Departamento (Kz)',
       data: departmentStats.map(dept => dept.total),
       backgroundColor: [
         'rgba(59, 130, 246, 0.7)',
@@ -330,7 +330,7 @@ const Relatorios: React.FC = () => {
       },
       tooltip: {
         callbacks: {
-          label: (context) => `€${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          label: (context) => `Kz ${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
         }
       }
     },
@@ -338,7 +338,7 @@ const Relatorios: React.FC = () => {
       y: {
         beginAtZero: true,
         ticks: {
-          callback: (value) => `€${value}`
+          callback: (value) => `Kz ${value}`
         }
       }
     }
@@ -481,7 +481,7 @@ const Relatorios: React.FC = () => {
             <div className="text-right">
               <p className="text-xs font-medium text-gray-500">Orçamento Total</p>
               <p className="text-xl font-bold text-gray-900">
-                €{totalOrcamento.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Kz {totalOrcamento.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -489,7 +489,7 @@ const Relatorios: React.FC = () => {
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>Disponível</span>
               <span className="font-medium text-green-600">
-                €{(totalOrcamento - totalDespesas).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Kz {(totalOrcamento - totalDespesas).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>
@@ -503,7 +503,7 @@ const Relatorios: React.FC = () => {
             <div className="text-right">
               <p className="text-xs font-medium text-gray-500">Despesas Aprovadas</p>
               <p className="text-xl font-bold text-gray-900">
-                €{totalDespesas.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Kz {totalDespesas.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -563,7 +563,7 @@ const Relatorios: React.FC = () => {
             <div className="text-right">
               <p className="text-xs font-medium text-gray-500">Média Mensal</p>
               <p className="text-xl font-bold text-gray-900">
-                €{(totalDespesas / 12).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Kz {(totalDespesas / 12).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           </div>
@@ -571,7 +571,7 @@ const Relatorios: React.FC = () => {
             <div className="flex items-center justify-between text-xs text-gray-500">
               <span>Maior despesa</span>
               <span className="font-medium text-gray-900">
-                {topDespesas[0] ? `€${topDespesas[0].valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
+                {topDespesas[0] ? `Kz ${topDespesas[0].valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}
               </span>
             </div>
           </div>
@@ -598,7 +598,7 @@ const Relatorios: React.FC = () => {
                   ...chartOptions.plugins,
                   tooltip: {
                     callbacks: {
-                      label: (context) => `€${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                      label: (context) => `Kz ${context.raw?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     }
                   }
                 },
@@ -606,7 +606,7 @@ const Relatorios: React.FC = () => {
                   y: {
                     beginAtZero: true,
                     ticks: {
-                      callback: (value) => `€${value}`
+                      callback: (value) => `Kz ${value}`
                     }
                   }
                 }
@@ -691,7 +691,7 @@ const Relatorios: React.FC = () => {
                       display: false
                     },
                     ticks: {
-                      callback: (value) => `€${value}`
+                      callback: (value) => `Kz ${value}`
                     }
                   },
                   y: {
@@ -727,7 +727,7 @@ const Relatorios: React.FC = () => {
                         {despesa.descricao}
                       </h4>
                       <span className="text-sm font-semibold text-gray-900 ml-2">
-                        €{despesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        Kz {despesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                     <div className="mt-1 flex items-center text-xs text-gray-500">
@@ -802,7 +802,7 @@ const Relatorios: React.FC = () => {
                       {despesa.rubrica?.orcamento?.departamento?.nome}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      €{despesa.valor.toLocaleString()}
+                      Kz {despesa.valor.toLocaleString()}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${

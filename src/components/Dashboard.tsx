@@ -3,13 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { dashboardAPI, despesasAPI } from '../lib/mockApi';
 import type { DashboardStats, Despesa } from '../types/database';
 import { 
-  Euro, 
   TrendingUp, 
   Clock, 
   CheckCircle, 
   XCircle, 
   BarChart3,
-  Receipt 
+  Receipt,
+  DollarSign 
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -78,12 +78,12 @@ const Dashboard: React.FC = () => {
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
           <div className="flex items-center justify-between">
             <div className="p-3 bg-blue-50 rounded-xl">
-              <Euro className="h-6 w-6 text-blue-600" />
+              <DollarSign className="h-6 w-6 text-blue-600" />
             </div>
             <div className="text-right">
               <p className="text-xs font-medium text-gray-500">Orçamento Total</p>
               <p className="text-xl font-bold text-gray-900">
-                €{stats?.totalOrcamento?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
+                Kz {stats?.totalOrcamento?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
               </p>
             </div>
           </div>
@@ -106,7 +106,7 @@ const Dashboard: React.FC = () => {
             <div className="text-right">
               <p className="text-xs font-medium text-gray-500">Despesas Aprovadas</p>
               <p className="text-xl font-bold text-gray-900">
-                €{stats?.totalDespesas?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
+                Kz {stats?.totalDespesas?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
               </p>
             </div>
           </div>
@@ -207,7 +207,7 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center justify-between mb-1">
                 <span className="text-sm font-medium text-gray-700">Orçamento Disponível</span>
                 <span className="text-sm font-semibold text-green-600">
-                  €{(stats?.totalOrcamento && stats?.totalDespesas) ? 
+                  Kz {(stats?.totalOrcamento && stats?.totalDespesas) ? 
                     (stats.totalOrcamento - stats.totalDespesas).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}
                 </span>
               </div>
@@ -238,11 +238,11 @@ const Dashboard: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-700">Total Gasto</span>
                 <span className="text-sm font-semibold text-gray-900">
-                  €{stats?.totalDespesas?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
+                  Kz {stats?.totalDespesas?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
                 </span>
               </div>
               <div className="flex items-center justify-between mt-1">
-                <span className="text-sm text-gray-500">de €{stats?.totalOrcamento?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}</span>
+                <span className="text-sm text-gray-500">de Kz {stats?.totalOrcamento?.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}</span>
                 <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">
                   {stats?.utilizacaoOrcamento?.toFixed(1) || '0'}% utilizado
                 </span>
@@ -320,7 +320,7 @@ const Dashboard: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <div className="text-sm font-medium text-gray-900">
-                          €{despesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          Kz {despesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">

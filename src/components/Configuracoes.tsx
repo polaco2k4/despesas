@@ -372,7 +372,7 @@ const Configuracoes: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Limite para Aprovação Automática (€)
+                        Limite para Aprovação Automática (Kz)
                       </label>
                       <input
                         type="number"
@@ -385,7 +385,7 @@ const Configuracoes: React.FC = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Valor Máximo de Despesa (€)
+                        Valor Máximo de Despesa (Kz)
                       </label>
                       <input
                         type="number"
@@ -475,14 +475,14 @@ const Configuracoes: React.FC = () => {
                       <div className="p-4 flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-gray-900">Despesa aprovada</p>
-                          <p className="text-sm text-gray-500">€2.000 - Licença de software</p>
+                          <p className="text-sm text-gray-500">Kz 2.000 - Licença de software</p>
                         </div>
                         <span className="text-sm text-gray-500">Há 1 hora</span>
                       </div>
                       <div className="p-4 flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-gray-900">Nova despesa criada</p>
-                          <p className="text-sm text-gray-500">€500 - Material de escritório</p>
+                          <p className="text-sm text-gray-500">Kz 500 - Material de escritório</p>
                         </div>
                         <span className="text-sm text-gray-500">Há 2 horas</span>
                       </div>
