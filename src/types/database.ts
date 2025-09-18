@@ -5,6 +5,7 @@ export type AprovacaoStatus = 'aprovada' | 'rejeitada';
 export interface Departamento {
   id: string;
   nome: string;
+  sigla?: string;
   created_at: string;
   updated_at: string;
 }
