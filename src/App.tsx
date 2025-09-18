@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Login from './components/Login';
@@ -11,10 +12,10 @@ import Configuracoes from './components/Configuracoes';
 import Financas from './components/Financas';
 import Usuarios from './components/Usuarios';
 import Departamentos from './components/Departamentos';
+// Import removed as it's not needed for now
 
-const AppContent: React.FC = () => {
+const PrivateRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
   const { userProfile, loading } = useAuth();
-  const [currentPage, setCurrentPage] = useState('dashboard');
 
   if (loading) {
     return (
@@ -24,47 +25,104 @@ const AppContent: React.FC = () => {
     );
   }
 
-  if (!userProfile) {
-    return <Login />;
-  }
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'departamentos':
-        return <Departamentos />;
-      case 'usuarios':
-        return <Usuarios />;
-      case 'orcamentos':
-        return <Orcamentos />;
-      case 'despesas':
-        return <Despesas />;
-      case 'financas':
-        return <Financas />;
-      case 'fornecedores':
-        return <Fornecedores />;
-      case 'relatorios':
-        return <Relatorios />;
-      case 'configuracoes':
-        return <Configuracoes />;
-      default:
-        return <Dashboard />;
-    }
-  };
-
-  return (
-    <Layout currentPage={currentPage} onPageChange={setCurrentPage}>
-      {renderPage()}
+  return userProfile ? (
+    <Layout>
+      {element}
     </Layout>
+  ) : (
+    <Navigate to="/login" replace />
+  );
+};
+
+const AppContent: React.FC = () => {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/"
+        element={
+          <PrivateRoute element={<Dashboard />} />
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <PrivateRoute element={<Dashboard />} />
+        }
+      />
+      <Route
+        path="/departamentos"
+        element={
+          <PrivateRoute element={<Departamentos />} />
+        }
+      />
+      <Route
+        path="/usuarios"
+        element={
+          <PrivateRoute element={<Usuarios />} />
+        }
+      />
+      <Route
+        path="/orcamentos"
+        element={
+          <PrivateRoute element={<Orcamentos />} />
+        }
+      />
+      <Route
+        path="/despesas"
+        element={
+          <PrivateRoute element={<Despesas />} />
+        }
+      />
+      <Route
+        path="/financas"
+        element={
+          <PrivateRoute element={<Financas />} />
+        }
+      />
+      <Route
+        path="/fornecedores"
+        element={
+          <PrivateRoute element={<Fornecedores />} />
+        }
+      />
+      <Route
+        path="/relatorios"
+        element={
+          <PrivateRoute element={<Relatorios />} />
+        }
+      />
+      <Route
+        path="/configuracoes"
+        element={
+          <PrivateRoute element={<Configuracoes />} />
+        }
+      />
+      <Route 
+        path="*" 
+        element={
+          <Layout>
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">404 - Página não encontrada</h2>
+                <p className="text-gray-600 mb-4">A página que você está procurando não existe ou foi movida.</p>
+                <Navigate to="/" replace />
+              </div>
+            </div>
+          </Layout>
+        } 
+      />
+    </Routes>
   );
 };
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
   );
 };
 

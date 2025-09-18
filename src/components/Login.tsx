@@ -1,13 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Building2, Mail, Lock, AlertCircle } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Building2, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 
 const Login: React.FC = () => {
-  const { signIn } = useAuth();
+  const { signIn, userProfile, loading: authLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname || '/';
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (userProfile && !authLoading) {
+      navigate(from, { replace: true });
+    }
+  }, [userProfile, authLoading, navigate, from]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,18 +29,21 @@ const Login: React.FC = () => {
     }
 
     setError('');
-    setLoading(true);
+    setIsSubmitting(true);
 
     try {
       const { error } = await signIn(email, password);
       
       if (error) {
-        setError('Email ou palavra-passe inválidos');
+        setError(error.message || 'Email ou palavra-passe inválidos');
+      } else {
+        // Navigation will be handled by the useEffect above
       }
     } catch (err) {
-      setError('Erro ao realizar login. Tente novamente.');
+      console.error('Login error:', err);
+      setError('Ocorreu um erro ao tentar fazer login. Tente novamente.');
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -38,6 +52,17 @@ const Login: React.FC = () => {
     { role: 'Gestor', email: 'joao@empresa.com', password: '123456' },
     { role: 'Colaborador', email: 'carlos@empresa.com', password: '123456' },
   ];
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-cyan-100">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">A verificar autenticação...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -102,10 +127,17 @@ const Login: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              disabled={isSubmitting}
+              className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              {loading ? 'Entrando...' : 'Entrar'}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                  A processar...
+                </>
+              ) : (
+                'Entrar'
+              )}
             </button>
           </form>
         </div>

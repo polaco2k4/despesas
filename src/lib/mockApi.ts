@@ -560,20 +560,33 @@ export const dashboardAPI = {
 export const authAPI = {
   signIn: async (email: string, password: string) => {
     await delay();
-    const user = authenticateUser(email, password);
-    if (!user) {
-      throw new Error('Credenciais inválidas');
+    try {
+      const user = authenticateUser(email, password);
+      if (!user) {
+        return { user: null, error: 'Email ou senha inválidos' };
+      }
+      return { user, error: null };
+    } catch (error) {
+      console.error('Authentication error:', error);
+      return { user: null, error: 'Erro ao fazer login. Tente novamente.' };
     }
-    return { user, error: null };
   },
-
   signOut: async () => {
     await delay();
-    logoutUser();
-    return { error: null };
+    try {
+      logoutUser();
+      return { error: null };
+    } catch (error) {
+      console.error('Logout error:', error);
+      return { error: 'Erro ao fazer logout' };
+    }
   },
-
   getCurrentUser: () => {
-    return getCurrentUser();
+    try {
+      return getCurrentUser();
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
+    }
   }
 };

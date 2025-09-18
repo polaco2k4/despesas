@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { despesasAPI, rubricasAPI, departamentosAPI } from '../lib/mockApi';
 import type { Despesa, Rubrica, Departamento, DashboardStats, DespesaStatus } from '../types/database';
+import WithDepartmentAccess from './auth/withDepartmentAccess';
 import { 
   Search, 
   XCircle, 
@@ -40,7 +41,7 @@ interface Estatisticas {
   porMes: { mes: string; valor: number }[];
 }
 
-const Financas: React.FC = () => {
+const FinancasContent: React.FC = () => {
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [rubricas, setRubricas] = useState<Rubrica[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -1195,6 +1196,18 @@ const Financas: React.FC = () => {
         </div>
       )}
     </div>
+  );
+};
+
+const Financas: React.FC = () => {
+  return (
+    <WithDepartmentAccess 
+      allowedDepartments={['1']} // Only Finance department
+      allowedRoles={['admin', 'gestor']} // Only admins and managers
+      requireSuperAdmin={false} // Allow both super admins and finance department admins/managers
+    >
+      <FinancasContent />
+    </WithDepartmentAccess>
   );
 };
 

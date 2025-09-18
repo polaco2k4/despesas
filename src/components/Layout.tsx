@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   LayoutDashboard, 
@@ -16,17 +16,18 @@ import {
   Truck,
   DollarSign
 } from 'lucide-react';
-import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage: string;
-  onPageChange: (page: string) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, currentPage, onPageChange }) => {
+const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { userProfile, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const currentPage = location.pathname.split('/')[1] || 'dashboard';
 
   const handleSignOut = async () => {
     await signOut();
@@ -44,10 +45,21 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onPageChange }) 
     { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador'] },
   ];
 
-  const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(userProfile?.role || '')
-  );
+  const isSuperAdmin = userProfile?.role === 'admin' && !userProfile?.departamento_id;
+  const isFinanceManager = userProfile?.role === 'gestor' && userProfile?.departamento_id === '1';
+  const isFinanceAdmin = userProfile?.role === 'admin' && userProfile?.departamento_id === '1';
 
+  const filteredMenuItems = menuItems.filter(item => {
+    // Check if user has the required role
+    const hasRole = item.roles.includes(userProfile?.role || '');
+    
+    // Special handling for Finanças page
+    if (item.id === 'financas') {
+      return isSuperAdmin || isFinanceManager || isFinanceAdmin;
+    }
+    
+    return hasRole;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -121,7 +133,7 @@ const Layout: React.FC<LayoutProps> = ({ children, currentPage, onPageChange }) 
                   <li key={item.id}>
                     <button
                       onClick={() => {
-                        onPageChange(item.id);
+                        navigate(`/${item.id}`);
                         setSidebarOpen(false);
                       }}
                       className={`w-full flex items-center px-4 py-3 text-left rounded-xl transition-all duration-200 ${
