@@ -1,22 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { despesasAPI, rubricasAPI, aprovacoesAPI, orcamentosAPI, fornecedoresAPI } from '../lib/mockApi';
+import { despesasAPI, rubricasAPI, orcamentosAPI, fornecedoresAPI } from '../lib/mockApi';
 import type { Despesa, Rubrica, Orcamento } from '../types/database';
 import { 
   Plus, 
   Search, 
+  Eye, 
+  Trash2, 
+  Upload, 
+  Download, 
+  Filter, 
+  X, 
+  Check, 
+  AlertCircle, 
+  Pencil, 
+  ChevronDown, 
+  ChevronUp, 
   CheckCircle, 
   XCircle, 
-  Trash2,
-  Eye,
   FileText
 } from 'lucide-react';
+import { AlertDialog } from './ui/AlertDialog';
 
 const Despesas: React.FC = () => {
   const { userProfile } = useAuth();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [rubricas, setRubricas] = useState<Array<Rubrica & { orcamento?: { valor_total: number; departamento?: { nome: string } } }>>([]);
   const [loading, setLoading] = useState(true);
+  const [alertDialog, setAlertDialog] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'error' as const,
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -76,6 +92,13 @@ const Despesas: React.FC = () => {
       })));
     } catch (error) {
       console.error('Error fetching fornecedores:', error);
+      // Show error to user
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Não foi possível carregar a lista de fornecedores. Por favor, tente novamente mais tarde.',
+        type: 'error'
+      });
     }
   };
 
@@ -134,16 +157,45 @@ const Despesas: React.FC = () => {
     e.preventDefault();
     
     try {
+      const valorDespesa = parseFloat(newDespesa.valor);
+      
+      // Get the selected rubric and its total budget
+      const rubrica = availableRubricas.find(r => r.id === newDespesa.rubrica_id);
+      if (!rubrica) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Erro',
+          message: 'Rubrica não encontrada',
+          type: 'error'
+        });
+        return;
+      }
+      
+      // Get all expenses for this rubric
+      const todasDespesas = await despesasAPI.getAll();
+      const despesasDestaRubrica = todasDespesas.filter(d => d.rubrica_id === newDespesa.rubrica_id);
+      
+      // Calculate total spent on this rubric
+      const totalGasto = despesasDestaRubrica.reduce((sum, d) => sum + d.valor, 0);
+      const orcamentoDisponivel = rubrica.valor - totalGasto;
+      
+      // Check if the new expense would exceed the budget
+      if (valorDespesa > orcamentoDisponivel) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Orçamento Excedido',
+          message: `O valor da despesa (Kz ${valorDespesa.toLocaleString('pt-PT')}) excede o orçamento disponível para esta rubrica (Kz ${orcamentoDisponivel.toLocaleString('pt-PT')}).`,
+          type: 'error'
+        });
+        return;
+      }
+      
       const despesaData = {
         rubrica_id: newDespesa.rubrica_id,
         usuario_id: userProfile!.id,
         descricao: newDespesa.descricao,
-        valor: parseFloat(newDespesa.valor),
+        valor: valorDespesa,
         fornecedor_id: newDespesa.fornecedor_id,
-        // Os campos abaixo são apenas para exibição e não precisam ser enviados
-        // valor_orcamento: newDespesa.valor_orcamento,
-        // orcamento_disponivel: newDespesa.orcamento_disponivel,
-        // orcamento_realizado: newDespesa.orcamento_realizado,
         anexo_url: newDespesa.anexo ? URL.createObjectURL(newDespesa.anexo) : null
       };
 
@@ -227,13 +279,48 @@ const Despesas: React.FC = () => {
     if (!selectedDespesa) return;
     
     try {
-      // Se a despesa estava negada, muda o status para 'pendente' ao atualizar
+      const valorDespesa = typeof editingDespesa.valor === 'string' ? parseFloat(editingDespesa.valor) : editingDespesa.valor;
+      
+      // Get the selected rubric and its total budget
+      const rubrica = availableRubricas.find(r => r.id === editingDespesa.rubrica_id);
+      if (!rubrica) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Erro',
+          message: 'Rubrica não encontrada',
+          type: 'error'
+        });
+        return;
+      }
+      
+      // Get all expenses for this rubric except the current one being updated
+      const todasDespesas = await despesasAPI.getAll();
+      const outrasDespesasDestaRubrica = todasDespesas.filter(
+        d => d.rubrica_id === editingDespesa.rubrica_id && d.id !== selectedDespesa.id
+      );
+      
+      // Calculate total spent on this rubric (excluding the current expense being updated)
+      const totalGasto = outrasDespesasDestaRubrica.reduce((sum, d) => sum + d.valor, 0);
+      const orcamentoDisponivel = rubrica.valor - totalGasto;
+      
+      // Check if the updated expense would exceed the budget
+      if (valorDespesa > orcamentoDisponivel) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Orçamento Excedido',
+          message: `O valor atualizado da despesa (Kz ${valorDespesa.toLocaleString('pt-PT')}) excede o orçamento disponível para esta rubrica (Kz ${orcamentoDisponivel.toLocaleString('pt-PT')}).`,
+          type: 'error'
+        });
+        return;
+      }
+      
+      // If the expense was rejected, change status to 'pendente' when updating
       const statusAtualizado = selectedDespesa.status === 'negada' ? 'pendente' : selectedDespesa.status;
       
       const despesaData = {
         rubrica_id: editingDespesa.rubrica_id,
         descricao: editingDespesa.descricao,
-        valor: editingDespesa.valor,
+        valor: valorDespesa,
         fornecedor_id: editingDespesa.fornecedor_id,
         status: statusAtualizado, // Atualiza o status se necessário
         anexo_url: editingDespesa.anexo_url
@@ -991,6 +1078,15 @@ const Despesas: React.FC = () => {
           </div>
         </div>
       )}
+      
+      {/* Custom Alert Dialog */}
+      <AlertDialog
+        isOpen={alertDialog.isOpen}
+        onClose={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        type={alertDialog.type}
+      />
     </div>
   );
 };
