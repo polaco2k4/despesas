@@ -478,19 +478,20 @@ export const fornecedoresAPI = {
     await delay();
     const fornecedor = mockFornecedores.find(f => f.id === id);
     if (!fornecedor) throw new Error('Fornecedor não encontrado');
-    return fornecedor;
+    return { ...fornecedor };
   },
 
   create: async (fornecedor: Omit<Fornecedor, 'id' | 'created_at' | 'updated_at'>): Promise<Fornecedor> => {
     await delay();
     const newFornecedor: Fornecedor = {
       ...fornecedor,
+      documentos: [],
       id: `forn-${Date.now()}`,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
     mockFornecedores.push(newFornecedor);
-    return newFornecedor;
+    return { ...newFornecedor };
   },
 
   update: async (id: string, updates: Partial<Fornecedor>): Promise<Fornecedor> => {
@@ -501,9 +502,14 @@ export const fornecedoresAPI = {
     mockFornecedores[index] = {
       ...mockFornecedores[index],
       ...updates,
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      // Keep existing documentos if not being updated
+      documentos: updates.documentos !== undefined 
+        ? updates.documentos 
+        : mockFornecedores[index].documentos
     };
-    return mockFornecedores[index];
+    
+    return { ...mockFornecedores[index] };
   },
 
   delete: async (id: string): Promise<void> => {
@@ -511,6 +517,54 @@ export const fornecedoresAPI = {
     const index = mockFornecedores.findIndex(f => f.id === id);
     if (index === -1) throw new Error('Fornecedor não encontrado');
     mockFornecedores.splice(index, 1);
+  },
+  
+  // Documentos do Fornecedor
+  addDocumento: async (fornecedorId: string, file: File): Promise<DocumentoFornecedor> => {
+    await delay();
+    const index = mockFornecedores.findIndex(f => f.id === fornecedorId);
+    if (index === -1) throw new Error('Fornecedor não encontrado');
+    
+    const newDocument: DocumentoFornecedor = {
+      id: `doc-${Date.now()}`,
+      nome: file.name,
+      url: URL.createObjectURL(file), // In a real app, this would be an API endpoint
+      tipo: file.type || 'application/octet-stream',
+      tamanho: file.size,
+      data_upload: new Date().toISOString()
+    };
+    
+    if (!mockFornecedores[index].documentos) {
+      mockFornecedores[index].documentos = [];
+    }
+    
+    mockFornecedores[index].documentos?.push(newDocument);
+    mockFornecedores[index].updated_at = new Date().toISOString();
+    
+    return { ...newDocument };
+  },
+  
+  removeDocumento: async (fornecedorId: string, documentoId: string): Promise<void> => {
+    await delay();
+    const index = mockFornecedores.findIndex(f => f.id === fornecedorId);
+    if (index === -1) throw new Error('Fornecedor não encontrado');
+    
+    const docIndex = mockFornecedores[index].documentos?.findIndex(d => d.id === documentoId) ?? -1;
+    if (docIndex === -1) throw new Error('Documento não encontrado');
+    
+    mockFornecedores[index].documentos?.splice(docIndex, 1);
+    mockFornecedores[index].updated_at = new Date().toISOString();
+  },
+  
+  getDocumento: async (fornecedorId: string, documentoId: string): Promise<DocumentoFornecedor> => {
+    await delay();
+    const fornecedor = mockFornecedores.find(f => f.id === fornecedorId);
+    if (!fornecedor) throw new Error('Fornecedor não encontrado');
+    
+    const documento = fornecedor.documentos?.find(d => d.id === documentoId);
+    if (!documento) throw new Error('Documento não encontrado');
+    
+    return { ...documento };
   }
 };
 

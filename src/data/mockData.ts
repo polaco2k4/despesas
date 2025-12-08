@@ -331,6 +331,15 @@ export const mockAprovacoes: Aprovacao[] = [
 ];
 
 // Fornecedores
+export interface DocumentoFornecedor {
+  id: string;
+  nome: string;
+  url: string;
+  tipo: string;
+  tamanho: number;
+  data_upload: string;
+}
+
 export interface Fornecedor {
   id: string;
   nome: string;
@@ -340,6 +349,7 @@ export interface Fornecedor {
   nif: string;
   categoria: string;
   status: 'ativo' | 'inativo';
+  documentos?: DocumentoFornecedor[];
   created_at: string;
   updated_at: string;
 }

@@ -14,7 +14,12 @@ import {
   MapPin,
   FileText,
   CheckCircle,
-  XCircle
+  XCircle,
+  Upload,
+  Download,
+  FileIcon,
+  X,
+  FileUp
 } from 'lucide-react';
 
 const Fornecedores: React.FC = () => {
@@ -36,6 +41,9 @@ const Fornecedores: React.FC = () => {
     categoria: '',
     status: 'ativo' as 'ativo' | 'inativo'
   });
+  
+  const [uploadingFile, setUploadingFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     fetchData();
@@ -96,6 +104,59 @@ const Fornecedores: React.FC = () => {
   };
 
   const canManageFornecedores = userProfile?.role === 'admin' || userProfile?.role === 'gestor';
+  
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fornecedorId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      setUploadingFile(file);
+      setUploadProgress(0);
+      
+      // Simulate upload progress
+      const interval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(interval);
+            return prev;
+          }
+          return prev + 10;
+        });
+      }, 100);
+      
+      await fornecedoresAPI.addDocumento(fornecedorId, file);
+      setUploadProgress(100);
+      await fetchData();
+    } catch (error) {
+      console.error('Erro ao fazer upload do documento:', error);
+      alert('Erro ao fazer upload do documento');
+    } finally {
+      setTimeout(() => {
+        setUploadingFile(null);
+        setUploadProgress(0);
+      }, 500);
+    }
+  };
+  
+  const handleDeleteDocumento = async (fornecedorId: string, documentoId: string) => {
+    if (!confirm('Tem certeza que deseja remover este documento?')) return;
+    
+    try {
+      await fornecedoresAPI.removeDocumento(fornecedorId, documentoId);
+      await fetchData();
+    } catch (error) {
+      console.error('Erro ao remover documento:', error);
+      alert('Erro ao remover documento');
+    }
+  };
+  
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   const filteredFornecedores = fornecedores.filter(fornecedor => {
     const matchesSearch = fornecedor.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -251,6 +312,25 @@ const Fornecedores: React.FC = () => {
                   {canManageFornecedores && (
                     <div className="flex items-center space-x-2">
                       <button
+                        onClick={() => {
+                          // Set the form with current supplier data for editing
+                          setNewFornecedor({
+                            nome: fornecedor.nome,
+                            email: fornecedor.email,
+                            telefone: fornecedor.telefone,
+                            endereco: fornecedor.endereco,
+                            nif: fornecedor.nif,
+                            categoria: fornecedor.categoria,
+                            status: fornecedor.status
+                          });
+                          setShowCreateModal(true);
+                        }}
+                        className="text-yellow-600 hover:text-yellow-700 p-1 rounded"
+                        title="Editar fornecedor"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button
                         onClick={() => handleToggleStatus(fornecedor.id, fornecedor.status)}
                         className={`p-1 rounded ${
                           fornecedor.status === 'ativo'
@@ -347,7 +427,7 @@ const Fornecedores: React.FC = () => {
                 <input
                   type="text"
                   value={newFornecedor.nif}
-                  onChange={(e) => setNewFornecedor({ ...newFornecedor, nif: e.target.value })}
+                  onChange={(e) => setNewFornecedor({ ...newForcedor, nif: e.target.value })}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="123456789"
@@ -361,7 +441,7 @@ const Fornecedores: React.FC = () => {
                 <input
                   type="text"
                   value={newFornecedor.categoria}
-                  onChange={(e) => setNewFornecedor({ ...newFornecedor, categoria: e.target.value })}
+                  onChange={(e) => setNewForcedor({ ...newForcedor, categoria: e.target.value })}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Categoria do fornecedor"
@@ -467,7 +547,7 @@ const Fornecedores: React.FC = () => {
                 <p className="text-gray-900">{selectedFornecedor.nif}</p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Criado em</label>
                   <p className="text-gray-900">{new Date(selectedFornecedor.created_at).toLocaleString('pt-PT')}</p>
@@ -476,6 +556,102 @@ const Fornecedores: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700">Atualizado em</label>
                   <p className="text-gray-900">{new Date(selectedFornecedor.updated_at).toLocaleString('pt-PT')}</p>
                 </div>
+              </div>
+
+              {/* Documentos do Fornecedor */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Documentos</h3>
+                  {canManageFornecedores && (
+                    <label className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer">
+                      <Upload className="h-4 w-4 mr-1" />
+                      Adicionar Documento
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleFileUpload(e, selectedFornecedor.id);
+                            // Reset the input to allow selecting the same file again
+                            e.target.value = '';
+                          }
+                        }}
+                        disabled={uploadingFile !== null}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {uploadingFile && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-blue-700 truncate">{uploadingFile.name}</span>
+                      <span className="text-xs text-blue-600">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedFornecedor.documentos && selectedFornecedor.documentos.length > 0 ? (
+                  <div className="space-y-2">
+                    {selectedFornecedor.documentos.map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md hover:bg-gray-100">
+                        <div className="flex items-center space-x-3">
+                          <FileIcon className="h-5 w-5 text-gray-400" />
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 truncate max-w-xs">{doc.nome}</p>
+                            <p className="text-xs text-gray-500">
+                              {formatFileSize(doc.tamanho)} • {new Date(doc.data_upload).toLocaleDateString('pt-PT')}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <a
+                            href={doc.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-50"
+                            title="Ver documento"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </a>
+                          <a
+                            href={doc.url}
+                            download
+                            className="text-green-600 hover:text-green-800 p-1 rounded-full hover:bg-green-50"
+                            title="Transferir"
+                          >
+                            <Download className="h-4 w-4" />
+                          </a>
+                          {canManageFornecedores && (
+                            <button
+                              onClick={() => handleDeleteDocumento(selectedFornecedor.id, doc.id)}
+                              className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-red-50"
+                              title="Remover"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-gray-50 rounded-md">
+                    <FileUp className="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhum documento</h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {canManageFornecedores 
+                        ? 'Adicione documentos clicando no botão acima.' 
+                        : 'Nenhum documento disponível.'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
