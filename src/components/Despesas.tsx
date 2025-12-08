@@ -33,15 +33,33 @@ const Despesas: React.FC = () => {
     orcamento_realizado: ''
   });
   
+  // Reset form when closing the modal
+  const resetNewDespesaForm = () => {
+    setNewDespesa({
+      rubrica_id: '',
+      descricao: '',
+      valor: '',
+      anexo: null,
+      fornecedor_id: '',
+      valor_orcamento: '',
+      orcamento_disponivel: '',
+      orcamento_realizado: ''
+    });
+    setSelectedDespesa(null);
+  };
+  
   const [fornecedores, setFornecedores] = useState<Array<{id: string, nome: string}>>([]);
   const [isEditing, setIsEditing] = useState(false);
-  const [editingDespesa, setEditingDespesa] = useState<Omit<Despesa, 'id' | 'created_at' | 'updated_at' | 'status'> & { id?: string }>({
+  const [editingDespesa, setEditingDespesa] = useState<Omit<Despesa, 'id' | 'created_at' | 'updated_at' | 'status' | 'aprovacoes' | 'rubrica' | 'usuario'> & { 
+    id?: string;
+    fornecedor_id?: string | null;
+  }>({
     rubrica_id: '',
     descricao: '',
     valor: 0,
     anexo_url: null,
     usuario_id: '',
-    fornecedor_id: ''
+    fornecedor_id: null // Inicializado como null para consistência com o tipo
   });
 
   useEffect(() => {
@@ -181,16 +199,26 @@ const Despesas: React.FC = () => {
   };
 
   const handleEditDespesa = (despesa: Despesa) => {
+    // Se a despesa estiver negada, muda o status para 'pendente' ao editar
+    const updatedDespesa = {
+      ...despesa,
+      status: despesa.status === 'negada' ? 'pendente' : despesa.status
+    };
+    
+    // Prepara os dados para edição, tratando corretamente o fornecedor_id
     setEditingDespesa({
       rubrica_id: despesa.rubrica_id,
       descricao: despesa.descricao,
       valor: despesa.valor,
       anexo_url: despesa.anexo_url,
       usuario_id: despesa.usuario_id,
-      fornecedor_id: despesa.fornecedor_id || ''
+      fornecedor_id: despesa.fornecedor_id || null // Permite null para fornecedor_id
     });
-    setSelectedDespesa(despesa);
+    
+    // Atualiza a despesa selecionada com o status atualizado
+    setSelectedDespesa(updatedDespesa);
     setIsEditing(true);
+    setShowDetailModal(true);
   };
 
   const handleUpdateDespesa = async (e: React.FormEvent) => {
@@ -199,20 +227,25 @@ const Despesas: React.FC = () => {
     if (!selectedDespesa) return;
     
     try {
+      // Se a despesa estava negada, muda o status para 'pendente' ao atualizar
+      const statusAtualizado = selectedDespesa.status === 'negada' ? 'pendente' : selectedDespesa.status;
+      
       const despesaData = {
         rubrica_id: editingDespesa.rubrica_id,
         descricao: editingDespesa.descricao,
         valor: editingDespesa.valor,
         fornecedor_id: editingDespesa.fornecedor_id,
-        anexo_url: editingDespesa.anexo_url,
-        // Resetar o status para 'pendente' quando uma despesa rejeitada for editada
-        status: 'pendente' as const
+        status: statusAtualizado, // Atualiza o status se necessário
+        anexo_url: editingDespesa.anexo_url
       };
 
+      // Atualiza a despesa existente em vez de criar uma nova
       await despesasAPI.update(selectedDespesa.id, despesaData);
       
-      setIsEditing(false);
+      // Fecha o modal de edição e atualiza a lista
       setShowDetailModal(false);
+      setIsEditing(false);
+      resetNewDespesaForm();
       await fetchData();
     } catch (error) {
       console.error('Error updating despesa:', error);
@@ -568,16 +601,7 @@ const Despesas: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
-                    setNewDespesa({ 
-                      rubrica_id: '', 
-                      descricao: '', 
-                      valor: '', 
-                      anexo: null,
-                      fornecedor_id: '',
-                      valor_orcamento: '',
-                      orcamento_disponivel: '',
-                      orcamento_realizado: ''
-                    });
+                    resetNewDespesaForm();
                   }}
                   className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-md transition-colors"
                 >
@@ -613,49 +637,128 @@ const Despesas: React.FC = () => {
 
             {isEditing ? (
               <form onSubmit={handleUpdateDespesa} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descrição
-                  </label>
-                  <textarea
-                    value={editingDespesa.descricao}
-                    onChange={(e) => setEditingDespesa({...editingDespesa, descricao: e.target.value})}
-                    required
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Rubrica *
+                    </label>
+                    <select
+                      value={editingDespesa.rubrica_id}
+                      onChange={(e) => {
+                        const rubricaId = e.target.value;
+                        setEditingDespesa({
+                          ...editingDespesa,
+                          rubrica_id: rubricaId
+                        });
+                        handleRubricaChange(rubricaId);
+                      }}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecione uma rubrica</option>
+                      {rubricas.map((rubrica) => (
+                        <option key={rubrica.id} value={rubrica.id}>
+                          {rubrica.nome}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Descrição *
+                    </label>
+                    <textarea
+                      value={editingDespesa.descricao}
+                      onChange={(e) => setEditingDespesa({...editingDespesa, descricao: e.target.value})}
+                      required
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Descreva a despesa detalhadamente"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Valor
+                      Valor (Kz) *
                     </label>
                     <input
                       type="number"
                       step="0.01"
+                      min="0"
                       value={editingDespesa.valor}
-                      onChange={(e) => setEditingDespesa({...editingDespesa, valor: parseFloat(e.target.value)})}
+                      onChange={(e) => setEditingDespesa({...editingDespesa, valor: parseFloat(e.target.value) || 0})}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="0,00"
                     />
                   </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Fornecedor
                     </label>
                     <select
-                      value={editingDespesa.fornecedor_id}
-                      onChange={(e) => setEditingDespesa({...editingDespesa, fornecedor_id: e.target.value})}
+                      value={editingDespesa.fornecedor_id || ''}
+                      onChange={(e) => setEditingDespesa({
+                        ...editingDespesa, 
+                        fornecedor_id: e.target.value || null
+                      })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="">Selecionar fornecedor</option>
+                      <option value="">Selecione um fornecedor</option>
                       {fornecedores.map((fornecedor) => (
                         <option key={fornecedor.id} value={fornecedor.id}>
                           {fornecedor.nome}
                         </option>
                       ))}
                     </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Anexo
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      {editingDespesa.anexo_url ? (
+                        <div className="flex items-center">
+                          <a 
+                            href={editingDespesa.anexo_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            Ver anexo atual
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDespesa({...editingDespesa, anexo_url: null});
+                              // Aqui você pode adicionar lógica para remover o anexo do servidor se necessário
+                            }}
+                            className="ml-4 text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Remover anexo
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-full">
+                          <input
+                            type="file"
+                            onChange={handleFileChange}
+                            className="block w-full text-sm text-gray-500
+                              file:mr-4 file:py-2 file:px-4
+                              file:rounded-md file:border-0
+                              file:text-sm file:font-semibold
+                              file:bg-blue-50 file:text-blue-700
+                              hover:file:bg-blue-100"
+                          />
+                          <p className="mt-1 text-xs text-gray-500">
+                            Formatos suportados: .pdf, .jpg, .jpeg, .png (máx. 5MB)
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -737,46 +840,130 @@ const Despesas: React.FC = () => {
 
                 {/* Ações do usuário */}
                 {userProfile?.id === selectedDespesa.usuario_id && 
-                 ['pendente', 'rejeitada'].includes(selectedDespesa.status) && (
-                  <div className="pt-4 border-t">
+                 ['pendente', 'negada'].includes(selectedDespesa.status) && (
+                  <div className="pt-4 border-t space-y-2">
+                    <p className="text-sm text-gray-600 mb-2">
+                      {selectedDespesa.status === 'negada' 
+                        ? 'Esta despesa foi negada. Você pode editá-la e enviar novamente para aprovação.' 
+                        : 'Você pode editar esta despesa enquanto ela estiver pendente.'}
+                    </p>
                     <button
-                      onClick={() => handleEditDespesa(selectedDespesa)}
+                      onClick={() => {
+                        // For both denied and pending expenses, use the edit functionality
+                        handleEditDespesa(selectedDespesa);
+                      }}
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md"
                     >
-                      Editar Despesa
+                      {selectedDespesa.status === 'negada' ? 'Editar e Reenviar' : 'Editar Despesa'}
                     </button>
                   </div>
                 )}
 
-                {/* Aprovações */}
-                {selectedDespesa.aprovacoes && selectedDespesa.aprovacoes.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Histórico de Aprovações</label>
-                    <div className="space-y-2">
-                      {selectedDespesa.aprovacoes.map((aprovacao) => (
-                        <div key={aprovacao.id} className="bg-gray-50 p-3 rounded-md">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium text-gray-900">{aprovacao.aprovador?.nome}</p>
-                              <p className="text-sm text-gray-600">{aprovacao.role}</p>
-                            </div>
-                            <div className="text-right">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(aprovacao.status)}`}>
-                                {getStatusText(aprovacao.status)}
-                              </span>
-                              <p className="text-sm text-gray-600">
-                                {new Date(aprovacao.aprovado_em).toLocaleString('pt-PT')}
-                              </p>
-                            </div>
-                          </div>
-                          {aprovacao.comentario && (
-                            <p className="mt-2 text-sm text-gray-700">{aprovacao.comentario}</p>
-                          )}
-                        </div>
-                      ))}
+                {/* Approval History */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium text-gray-500 mb-4">Histórico de Aprovações e Pagamentos</h4>
+                  <div className="space-y-4">
+                    {/* Show creator info first */}
+                    <div className="border-l-4 border-blue-200 pl-4 py-2 bg-blue-50 rounded-r">
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm font-medium text-gray-900">
+                          {selectedDespesa.usuario?.nome || 'Utilizador não encontrado'}
+                          <span className="text-xs font-normal text-gray-500 ml-2">(Solicitante)</span>
+                        </p>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Despesa criada
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {new Date(selectedDespesa.created_at).toLocaleString('pt-PT')}
+                      </p>
+                      {selectedDespesa.descricao && (
+                        <p className="mt-1 text-sm text-gray-700">{selectedDespesa.descricao}</p>
+                      )}
                     </div>
+                    
+                    {/* Show approval/rejection history */}
+                    {selectedDespesa.aprovacoes && selectedDespesa.aprovacoes.length > 0 ? (
+                      [...selectedDespesa.aprovacoes]
+                        .sort((a, b) => new Date(a.aprovado_em).getTime() - new Date(b.aprovado_em).getTime())
+                        .map((aprovacao, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`border-l-4 pl-4 py-2 rounded-r ${
+                              aprovacao.status === 'aprovada' 
+                                ? 'border-green-200 bg-green-50' 
+                                : aprovacao.status === 'negada' 
+                                  ? 'border-red-200 bg-red-50' 
+                                  : 'border-yellow-200 bg-yellow-50'
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <p className="text-sm font-medium text-gray-900">
+                                {aprovacao.aprovador?.nome || 'Sistema'}
+                                <span className="text-xs font-normal text-gray-500 ml-2">
+                                  ({aprovacao.role === 'admin' ? 'Administrador' : 'Gestor'})
+                                </span>
+                              </p>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                aprovacao.status === 'aprovada' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : aprovacao.status === 'negada' 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {aprovacao.status === 'aprovada' 
+                                  ? 'Aprovada' 
+                                  : aprovacao.status === 'negada' 
+                                    ? 'Rejeitada' 
+                                    : 'Pendente'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {new Date(aprovacao.aprovado_em).toLocaleString('pt-PT')}
+                            </p>
+                            {aprovacao.comentario && (
+                              <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                                <p className="text-sm text-gray-700">{aprovacao.comentario}</p>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-center py-4 text-sm text-gray-500">
+                        Nenhuma aprovação registada ainda.
+                      </div>
+                    )}
+
+                    {/* Show payment information if the expense is paid */}
+                    {selectedDespesa.status === 'paga' && (
+                      <div className="border-l-4 border-green-200 pl-4 py-2 bg-green-50 rounded-r">
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm font-medium text-gray-900">
+                            {selectedDespesa.aprovacoes?.find(a => a.status === 'aprovada')?.aprovador?.nome || 'Sistema'}
+                            <span className="text-xs font-normal text-gray-500 ml-2">
+                              (Financeiro)
+                            </span>
+                          </p>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Pagamento processado
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {selectedDespesa.data_pagamento 
+                            ? `Efetuado em: ${new Date(selectedDespesa.data_pagamento).toLocaleString('pt-PT')}`
+                            : 'Data de pagamento não disponível'}
+                        </p>
+                        {selectedDespesa.aprovacoes?.find(a => a.status === 'paga')?.comentario && (
+                          <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                            <p className="text-sm text-gray-700">
+                              {selectedDespesa.aprovacoes.find(a => a.status === 'paga')?.comentario}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
 
                 {/* Approval Actions */}
                 {canApprove && selectedDespesa.status === 'pendente' && (

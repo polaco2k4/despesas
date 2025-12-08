@@ -21,6 +21,7 @@ const Orcamentos: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingOrcamento, setEditingOrcamento] = useState<Orcamento | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedOrcamento, setSelectedOrcamento] = useState<Orcamento | null>(null);
   const [newOrcamento, setNewOrcamento] = useState({
@@ -65,17 +66,28 @@ const Orcamentos: React.FC = () => {
     e.preventDefault();
     
     try {
-      await orcamentosAPI.create({
-        departamento_id: newOrcamento.departamento_id,
-        ano: newOrcamento.ano,
-        valor_total: parseFloat(newOrcamento.valor_total)
-      });
+      if (editingOrcamento) {
+        // Update existing orcamento
+        await orcamentosAPI.update(editingOrcamento.id, {
+          departamento_id: newOrcamento.departamento_id,
+          ano: newOrcamento.ano,
+          valor_total: parseFloat(newOrcamento.valor_total)
+        });
+      } else {
+        // Create new orcamento
+        await orcamentosAPI.create({
+          departamento_id: newOrcamento.departamento_id,
+          ano: newOrcamento.ano,
+          valor_total: parseFloat(newOrcamento.valor_total)
+        });
+      }
       
       setShowCreateModal(false);
       setNewOrcamento({ departamento_id: '', ano: new Date().getFullYear() + 1, valor_total: '' });
+      setEditingOrcamento(null);
       await fetchData();
     } catch (error) {
-      console.error('Error creating orcamento:', error);
+      console.error('Error saving orcamento:', error);
     }
   };
 
@@ -85,7 +97,7 @@ const Orcamentos: React.FC = () => {
     if (!selectedOrcamento) return;
     
     // Validate valor is a positive number
-    const valor = parseFloat(newRubrica.valor);
+    const valor = parseFloat(String(newRubrica.valor));
     if (isNaN(valor) || valor <= 0) {
       setRubricaError('Por favor, insira um valor válido maior que zero.');
       return;
@@ -141,9 +153,12 @@ const Orcamentos: React.FC = () => {
   };
 
   const handleDeleteOrcamento = async (id: string) => {
+    if (!isAdmin) return;
+    
     if (confirm('Tem certeza que deseja apagar este orçamento?')) {
       try {
         await orcamentosAPI.delete(id);
+        setEditingOrcamento(null);
         await fetchData();
       } catch (error) {
         console.error('Error deleting orcamento:', error);
@@ -152,6 +167,8 @@ const Orcamentos: React.FC = () => {
   };
 
   const handleEditRubrica = (rubrica: Rubrica) => {
+    if (!isAdmin) return;
+    
     setEditingRubrica(rubrica);
     setNewRubrica({
       nome: rubrica.nome,
@@ -162,6 +179,8 @@ const Orcamentos: React.FC = () => {
   };
 
   const handleDeleteRubrica = async (rubricaId: string) => {
+    if (!isAdmin) return;
+    
     if (confirm('Tem certeza que deseja apagar esta rubrica? Esta ação não pode ser desfeita.')) {
       try {
         await rubricasAPI.delete(rubricaId);
@@ -177,7 +196,7 @@ const Orcamentos: React.FC = () => {
     }
   };
 
-  const canCreateOrcamento = userProfile?.role === 'gestor' || userProfile?.role === 'admin';
+  const isAdmin = userProfile?.role === 'admin';
 
   const filteredOrcamentos = orcamentos.filter(orcamento => {
     const matchesSearch = orcamento.departamento?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -185,9 +204,11 @@ const Orcamentos: React.FC = () => {
     return matchesSearch;
   });
 
+  // Only admin can create orcamentos
+  const canCreateOrcamento = isAdmin;
+
   const availableDepartamentos = departamentos.filter(dept => {
-    if (userProfile?.role === 'admin') return true;
-    return dept.id === userProfile?.departamento_id;
+    return isAdmin || dept.id === userProfile?.departamento_id;
   });
 
   if (loading) {
@@ -286,15 +307,34 @@ const Orcamentos: React.FC = () => {
                       <span>Ver Detalhes</span>
                     </button>
                     
-                    {canCreateOrcamento && (
-                      <button
-                        onClick={() => handleDeleteOrcamento(orcamento.id)}
-                        className="text-red-600 hover:text-red-700"
-                        title="Apagar orçamento"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
+                    <div className="flex space-x-2">
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            setEditingOrcamento(orcamento);
+                            setNewOrcamento({
+                              departamento_id: orcamento.departamento_id,
+                              ano: orcamento.ano,
+                              valor_total: orcamento.valor_total.toString()
+                            });
+                            setShowCreateModal(true);
+                          }}
+                          className="text-blue-600 hover:text-blue-700"
+                          title="Editar orçamento"
+                        >
+                          <Edit size={16} />
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteOrcamento(orcamento.id)}
+                          className="text-red-600 hover:text-red-700"
+                          title="Apagar orçamento"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -307,7 +347,9 @@ const Orcamentos: React.FC = () => {
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Novo Orçamento</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingOrcamento ? 'Editar Orçamento' : 'Novo Orçamento'}
+            </h2>
             
             <form onSubmit={handleCreateOrcamento} className="space-y-4">
               <div>
