@@ -50,6 +50,8 @@ const FinancasContent: React.FC = () => {
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
+  const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [approvalComment, setApprovalComment] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
@@ -386,6 +388,41 @@ const FinancasContent: React.FC = () => {
     setShowRejectionModal(true);
   };
 
+  const handleApproveDespesa = async () => {
+    if (!selectedDespesa) return;
+
+    try {
+      setIsProcessing(true);
+      const dataAtual = new Date().toISOString();
+      
+      // Atualizar o status da despesa para 'aprovada'
+      await despesasAPI.update(selectedDespesa.id, { 
+        status: 'aprovada' as DespesaStatus,
+        descricao: selectedDespesa.descricao,
+        updated_at: dataAtual
+      });
+      
+      // Atualizar a lista de despesas, removendo a despesa aprovada
+      const novasDespesas = despesas.filter(d => d.id !== selectedDespesa.id);
+      setDespesas(novasDespesas);
+      setShowApprovalModal(false);
+      setShowDetailsModal(false);
+      
+      // Atualizar estatísticas
+      calcularEstatisticas(novasDespesas);
+      
+      setMessage({ 
+        text: `Despesa aprovada com sucesso em ${new Date(dataAtual).toLocaleDateString('pt-AO')}!`,
+        type: 'success' 
+      });
+    } catch (error) {
+      console.error('Erro ao aprovar despesa:', error);
+      setMessage({ text: 'Erro ao aprovar despesa', type: 'error' });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleRejectDespesa = async () => {
     if (!selectedDespesa || !rejectionReason.trim()) {
       setMessage({ text: 'Por favor, forneça um motivo para a rejeição', type: 'error' });
@@ -408,6 +445,7 @@ const FinancasContent: React.FC = () => {
       const novasDespesas = despesas.filter(d => d.id !== selectedDespesa.id);
       setDespesas(novasDespesas);
       setShowRejectionModal(false);
+      setShowDetailsModal(false);
       
       // Atualizar estatísticas
       calcularEstatisticas(novasDespesas);
@@ -1141,7 +1179,31 @@ const FinancasContent: React.FC = () => {
                 )}
               </div>
 
-              <div className="mt-6 flex justify-end">
+              <div className="mt-6 flex justify-between">
+                <div>
+                  {selectedDespesa.status === 'pendente' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowApprovalModal(true)}
+                        className="mr-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                        disabled={isProcessing}
+                      >
+                        <Check className="h-4 w-4 inline mr-1" />
+                        Aprovar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRejectionModal(selectedDespesa)}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                        disabled={isProcessing}
+                      >
+                        <X className="h-4 w-4 inline mr-1" />
+                        Rejeitar
+                      </button>
+                    </>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowDetailsModal(false)}
@@ -1190,6 +1252,40 @@ const FinancasContent: React.FC = () => {
                 disabled={isProcessing || !rejectionReason.trim()}
               >
                 {isProcessing ? 'Processando...' : 'Confirmar Rejeição'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approval Confirmation Modal */}
+      {showApprovalModal && selectedDespesa && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <AlertCircle className="h-6 w-6 text-green-500 mr-2" />
+              <h3 className="text-lg font-medium text-gray-900">Confirmar Aprovação</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Tem certeza que deseja aprovar esta despesa?
+              <span className="font-medium ml-1">{selectedDespesa.descricao}</span>
+            </p>
+            <div className="mt-5 sm:mt-6 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowApprovalModal(false)}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                disabled={isProcessing}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleApproveDespesa}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Processando...' : 'Confirmar Aprovação'}
               </button>
             </div>
           </div>

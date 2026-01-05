@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { despesasAPI, rubricasAPI, orcamentosAPI, fornecedoresAPI } from '../lib/mockApi';
+import { despesasAPI, rubricasAPI, orcamentosAPI, fornecedoresAPI, aprovacoesAPI } from '../lib/mockApi';
 import type { Despesa, Rubrica, Orcamento } from '../types/database';
 import { 
   Plus, 
