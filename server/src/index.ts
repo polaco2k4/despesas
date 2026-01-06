@@ -32,7 +32,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: true, // Allow all origins for network access
   credentials: true
 }));
 
@@ -72,10 +72,11 @@ const startServer = async () => {
     await getConnection();
     console.log('✅ Conexão com SQL Server estabelecida');
 
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Servidor rodando na porta ${PORT}`);
       console.log(`📍 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
       console.log(`📊 API disponível em: http://localhost:${PORT}/api`);
+      console.log(`🌐 Acessível na rede em: http://0.0.0.0:${PORT}/api`);
     });
   } catch (error) {
     console.error('❌ Erro ao iniciar servidor:', error);

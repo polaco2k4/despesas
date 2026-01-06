@@ -1,4 +1,14 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+// Dynamic API URL based on current hostname
+const getApiBaseUrl = () => {
+  const hostname = window.location.hostname;
+  // If accessing via IP or non-localhost, use the same hostname for API
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return `http://${hostname}:3001/api`;
+  }
+  return 'http://localhost:3001/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
