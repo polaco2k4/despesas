@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { departamentosAPI } from '../lib/mockApi';
+import { departamentosAPI } from '../lib/backendApi';
 import type { Departamento } from '../types/database';
 import { 
   Plus, 

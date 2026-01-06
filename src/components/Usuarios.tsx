@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { mockUsuarios, mockDepartamentos } from '../data/mockData';
+import { usuariosAPI, departamentosAPI } from '../lib/backendApi';
 import type { Usuario, UserRole } from '../types/database';
 import { 
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, 
-  Paper, Button, Dialog, DialogTitle, DialogContent, DialogActions, 
-  TextField, MenuItem, IconButton, Box, Typography, Snackbar, Alert
-} from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
+  Plus, 
+  Edit, 
+  Trash2,
+  Search,
+  XCircle
+} from 'lucide-react';
 
 type FormData = Omit<Usuario, 'id' | 'created_at' | 'updated_at' | 'departamento'> & {
   id?: string;
@@ -25,294 +26,375 @@ const initialFormData: FormData = {
 
 const Usuarios: React.FC = () => {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [departamentos, setDepartamentos] = useState(mockDepartamentos);
-  const [open, setOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [departamentos, setDepartamentos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
   const [formData, setFormData] = useState<FormData>(initialFormData);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
-    // In a real app, this would be an API call
-    setUsuarios(mockUsuarios.map(usuario => ({
-      ...usuario,
-      departamento: departamentos.find(d => d.id === usuario.departamento_id)
-    })));
+    fetchData();
   }, []);
 
-  const handleOpen = (usuario: Usuario | null = null) => {
-    if (usuario) {
-      setEditingId(usuario.id);
-      setFormData({
-        id: usuario.id,
-        nome: usuario.nome,
-        email: usuario.email,
-        role: usuario.role,
-        departamento_id: usuario.departamento_id || '',
-        password: '',
-        confirmPassword: ''
-      });
-    } else {
-      setEditingId(null);
-      setFormData(initialFormData);
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [usuariosData, departamentosData] = await Promise.all([
+        usuariosAPI.getAll(),
+        departamentosAPI.getAll()
+      ]);
+      setUsuarios(usuariosData);
+      setDepartamentos(departamentosData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
     }
-    setOpen(true);
   };
 
-  const handleClose = () => {
-    setOpen(false);
+  const handleEditUsuario = (usuario: Usuario) => {
+    setEditingUsuario(usuario);
+    setFormData({
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      role: usuario.role,
+      departamento_id: usuario.departamento_id || '',
+      password: '',
+      confirmPassword: ''
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowCreateModal(false);
     setFormData(initialFormData);
-    setEditingId(null);
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | { name?: string; value: unknown }>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name as string]: value
-    }));
+    setEditingUsuario(null);
   };
 
   const validateForm = (): boolean => {
     if (!formData.nome || !formData.email || !formData.role || !formData.departamento_id) {
-      setSnackbar({ open: true, message: 'Preencha todos os campos obrigatórios', severity: 'error' });
+      alert('Preencha todos os campos obrigatórios');
       return false;
     }
 
-    if (!editingId && (!formData.password || formData.password.length < 6)) {
-      setSnackbar({ open: true, message: 'A senha deve ter pelo menos 6 caracteres', severity: 'error' });
+    if (!editingUsuario && (!formData.password || formData.password.length < 6)) {
+      alert('A senha deve ter pelo menos 6 caracteres');
       return false;
     }
 
-    if (!editingId && formData.password !== formData.confirmPassword) {
-      setSnackbar({ open: true, message: 'As senhas não coincidem', severity: 'error' });
+    if (!editingUsuario && formData.password !== formData.confirmPassword) {
+      alert('As senhas não coincidem');
       return false;
     }
 
     return true;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!validateForm()) return;
 
-    if (editingId) {
-      // Update existing user
-      const updatedUsuarios = usuarios.map(usuario => 
-        usuario.id === editingId 
-          ? { 
-              ...usuario, 
-              ...formData,
-              departamento: departamentos.find(d => d.id === formData.departamento_id)
-            } 
-          : usuario
-      );
-      setUsuarios(updatedUsuarios);
-      setSnackbar({ open: true, message: 'Usuário atualizado com sucesso!', severity: 'success' });
-    } else {
-      // Add new user
-      const newUser: Usuario = {
-        id: `user-${Date.now()}`,
-        nome: formData.nome,
-        email: formData.email,
-        role: formData.role as UserRole,
-        departamento_id: formData.departamento_id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        departamento: departamentos.find(d => d.id === formData.departamento_id)
-      };
-      setUsuarios([...usuarios, newUser]);
-      setSnackbar({ open: true, message: 'Usuário adicionado com sucesso!', severity: 'success' });
+    try {
+      if (editingUsuario) {
+        await usuariosAPI.update(editingUsuario.id, {
+          nome: formData.nome,
+          email: formData.email,
+          role: formData.role,
+          departamento_id: formData.departamento_id
+        });
+      } else {
+        await usuariosAPI.create({
+          nome: formData.nome,
+          email: formData.email,
+          role: formData.role,
+          departamento_id: formData.departamento_id,
+          password_hash: formData.password
+        });
+      }
+      
+      handleCloseModal();
+      await fetchData();
+    } catch (error) {
+      console.error('Error saving usuario:', error);
+      alert('Erro ao salvar usuário');
     }
-    
-    handleClose();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDeleteUsuario = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
-      setUsuarios(usuarios.filter(usuario => usuario.id !== id));
-      setSnackbar({ open: true, message: 'Usuário excluído com sucesso!', severity: 'success' });
+      try {
+        await usuariosAPI.delete(id);
+        await fetchData();
+      } catch (error) {
+        console.error('Error deleting usuario:', error);
+        alert('Erro ao excluir usuário');
+      }
     }
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
+  const filteredUsuarios = usuarios.filter(usuario =>
+    usuario.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    usuario.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getRoleLabel = (role: UserRole) => {
+    switch (role) {
+      case 'admin': return 'Administrador';
+      case 'gestor': return 'Gestor';
+      case 'colaborador': return 'Colaborador';
+      default: return role;
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4">Gerenciar Usuários</Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          startIcon={<AddIcon />}
-          onClick={() => handleOpen()}
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Usuários</h1>
+        <button
+          onClick={() => {
+            setEditingUsuario(null);
+            setFormData(initialFormData);
+            setShowCreateModal(true);
+          }}
+          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md flex items-center gap-2"
         >
-          Adicionar Usuário
-        </Button>
-      </Box>
+          <Plus size={18} />
+          Novo Usuário
+        </button>
+      </div>
 
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Departamento</TableCell>
-              <TableCell>Perfil</TableCell>
-              <TableCell align="right">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {usuarios.map((usuario) => (
-              <TableRow key={usuario.id}>
-                <TableCell>{usuario.nome}</TableCell>
-                <TableCell>{usuario.email}</TableCell>
-                <TableCell>{usuario.departamento?.nome || 'N/A'}</TableCell>
-                <TableCell>
-                  <span style={{
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    backgroundColor: 
-                      usuario.role === 'admin' ? '#e3f2fd' : 
-                      usuario.role === 'gestor' ? '#e8f5e9' : '#f3e5f5',
-                    color: 
-                      usuario.role === 'admin' ? '#0d47a1' : 
-                      usuario.role === 'gestor' ? '#2e7d32' : '#6a1b9a',
-                    fontWeight: 500
-                  }}>
-                    {usuario.role === 'admin' ? 'Administrador' : 
-                     usuario.role === 'gestor' ? 'Gestor' : 'Colaborador'}
-                  </span>
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton onClick={() => handleOpen(usuario)} color="primary">
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton 
-                    onClick={() => handleDelete(usuario.id)} 
-                    color="error"
-                    disabled={usuario.role === 'admin'}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar usuário..."
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        <form onSubmit={handleSubmit}>
-          <DialogTitle>
-            {editingId ? 'Editar Usuário' : 'Adicionar Novo Usuário'}
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-              <TextField
-                label="Nome Completo"
-                name="nome"
-                value={formData.nome}
-                onChange={handleChange}
-                fullWidth
-                required
-                margin="normal"
-              />
-              <TextField
-                label="Email"
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleChange}
-                fullWidth
-                required
-                margin="normal"
-              />
-              
-              {!editingId && (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nome
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Email
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Departamento
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Perfil
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Data de Criação
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsuarios.length > 0 ? (
+                filteredUsuarios.map((usuario) => (
+                  <tr key={usuario.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {usuario.nome}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {usuario.email}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {usuario.departamento?.nome || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        usuario.role === 'admin' ? 'bg-blue-100 text-blue-800' :
+                        usuario.role === 'gestor' ? 'bg-green-100 text-green-800' :
+                        'bg-purple-100 text-purple-800'
+                      }`}>
+                        {getRoleLabel(usuario.role)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {new Date(usuario.created_at).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button
+                        onClick={() => handleEditUsuario(usuario)}
+                        className="text-blue-600 hover:text-blue-900 mr-4"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUsuario(usuario.id)}
+                        className="text-red-600 hover:text-red-900"
+                        disabled={usuario.role === 'admin'}
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                    Nenhum usuário encontrado.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">
+                {editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}
+              </h2>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4">
+                <label htmlFor="nome" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome Completo *
+                </label>
+                <input
+                  type="text"
+                  id="nome"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.nome}
+                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                />
+              </div>
+              {!editingUsuario && (
                 <>
-                  <TextField
-                    label="Senha"
-                    name="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    fullWidth
-                    required={!editingId}
-                    margin="normal"
-                  />
-                  <TextField
-                    label="Confirmar Senha"
-                    name="confirmPassword"
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    fullWidth
-                    required={!editingId}
-                    margin="normal"
-                  />
+                  <div className="mb-4">
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                      Senha *
+                    </label>
+                    <input
+                      type="password"
+                      id="password"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <div className="mb-4">
+                    <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                      Confirmar Senha *
+                    </label>
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      required
+                    />
+                  </div>
                 </>
               )}
-              
-              <TextField
-                select
-                label="Perfil"
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                fullWidth
-                required
-                margin="normal"
-              >
-                <MenuItem value="admin">Administrador</MenuItem>
-                <MenuItem value="gestor">Gestor</MenuItem>
-                <MenuItem value="colaborador">Colaborador</MenuItem>
-              </TextField>
-              
-              <TextField
-                select
-                label="Departamento"
-                name="departamento_id"
-                value={formData.departamento_id}
-                onChange={handleChange}
-                fullWidth
-                required
-                margin="normal"
-              >
-                {departamentos.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.id}>
-                    {dept.nome}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleClose}>Cancelar</Button>
-            <Button type="submit" variant="contained" color="primary">
-              {editingId ? 'Atualizar' : 'Salvar'}
-            </Button>
-          </DialogActions>
-        </form>
-      </Dialog>
-
-      <Snackbar 
-        open={snackbar.open} 
-        autoHideDuration={6000} 
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={handleCloseSnackbar} 
-          severity={snackbar.severity as 'success' | 'error'}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+              <div className="mb-4">
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
+                  Perfil *
+                </label>
+                <select
+                  id="role"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
+                  required
+                >
+                  <option value="colaborador">Colaborador</option>
+                  <option value="gestor">Gestor</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div className="mb-4">
+                <label htmlFor="departamento_id" className="block text-sm font-medium text-gray-700 mb-1">
+                  Departamento *
+                </label>
+                <select
+                  id="departamento_id"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  value={formData.departamento_id}
+                  onChange={(e) => setFormData({ ...formData, departamento_id: e.target.value })}
+                  required
+                >
+                  <option value="">Selecione um departamento</option>
+                  {departamentos.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  {editingUsuario ? 'Atualizar' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

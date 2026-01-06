@@ -81,5 +81,8 @@ export interface DashboardStats {
   totalPendente: number;
   totalNegado: number;
   totalAprovado: number;
+  despesasPendentes: number;
+  despesasAprovadas: number;
+  despesasNegadas: number;
   utilizacaoOrcamento: number;
 }

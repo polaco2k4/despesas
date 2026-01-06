@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { despesasAPI, orcamentosAPI, departamentosAPI } from '../lib/mockApi';
-import type { Despesa, Orcamento, Departamento } from '../types/database';
+import { despesasAPI, orcamentosAPI, departamentosAPI, rubricasAPI } from '../lib/backendApi';
+import type { Despesa, Orcamento, Departamento, Rubrica } from '../types/database';
 import { 
   Download, 
   Clock,
@@ -84,7 +84,7 @@ const Relatorios: React.FC = () => {
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rubricas, setRubricas] = useState<{id: string, nome: string}[]>([]);
+  const [rubricas, setRubricas] = useState<Rubrica[]>([]);
   const [filters, setFilters] = useState({
     departamento_id: '',
     ano: new Date().getFullYear(),
@@ -99,27 +99,17 @@ const Relatorios: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [despesasData, orcamentosData, departamentosData] = await Promise.all([
+      const [despesasData, orcamentosData, departamentosData, rubricasData] = await Promise.all([
         despesasAPI.getAll({}),
         orcamentosAPI.getAll(),
-        departamentosAPI.getAll()
+        departamentosAPI.getAll(),
+        rubricasAPI.getAll()
       ]);
-      
-      // Extract unique rubricas from despesas
-      const rubricasMap = new Map();
-      despesasData.forEach(despesa => {
-        if (despesa.rubrica) {
-          rubricasMap.set(despesa.rubrica.id, {
-            id: despesa.rubrica.id,
-            nome: despesa.rubrica.nome
-          });
-        }
-      });
       
       setDespesas(despesasData);
       setOrcamentos(orcamentosData);
       setDepartamentos(departamentosData);
-      setRubricas(Array.from(rubricasMap.values()));
+      setRubricas(rubricasData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

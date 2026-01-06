@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI } from '../lib/mockApi';
+import { authAPI } from '../lib/backendApi';
 import type { Usuario } from '../types/database';
 
 const USER_STORAGE_KEY = 'sgbd_user';
@@ -27,18 +27,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Load user from localStorage on initial load
   useEffect(() => {
-    const loadUser = async () => {
+    const loadUser = () => {
       try {
         const userJson = localStorage.getItem(USER_STORAGE_KEY);
         if (userJson) {
           const user = JSON.parse(userJson);
-          // Verify if the user still exists in the mock data
-          const userExists = (await authAPI.getCurrentUser())?.id === user.id;
-          if (userExists) {
-            setUserProfile(user);
-          } else {
-            localStorage.removeItem(USER_STORAGE_KEY);
-          }
+          setUserProfile(user);
         }
       } catch (error) {
         console.error('Error loading user:', error);

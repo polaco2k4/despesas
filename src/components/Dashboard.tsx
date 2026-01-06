@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { dashboardAPI, despesasAPI } from '../lib/mockApi';
+import { dashboardAPI, despesasAPI } from '../lib/backendApi';
 import type { DashboardStats, Despesa } from '../types/database';
 import { 
   TrendingUp, 

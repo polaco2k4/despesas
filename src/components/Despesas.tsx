@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { despesasAPI, rubricasAPI, orcamentosAPI, fornecedoresAPI, aprovacoesAPI } from '../lib/mockApi';
+import { despesasAPI, rubricasAPI, orcamentosAPI, aprovacoesAPI, fornecedoresAPI } from '../lib/backendApi';
 import type { Despesa, Rubrica, Orcamento } from '../types/database';
 import { 
   Plus, 
@@ -37,6 +37,8 @@ const Despesas: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionComment, setRejectionComment] = useState('');
   const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
   const [newDespesa, setNewDespesa] = useState({
     rubrica_id: '',
@@ -161,23 +163,23 @@ const Despesas: React.FC = () => {
       
       // Get the selected rubric and its total budget
       const rubrica = availableRubricas.find(r => r.id === newDespesa.rubrica_id);
-      if (!rubrica) {
+      if (!rubrica || !rubrica.orcamento) {
         setAlertDialog({
           isOpen: true,
           title: 'Erro',
-          message: 'Rubrica não encontrada',
+          message: 'Rubrica não encontrada ou sem orçamento associado',
           type: 'error'
         });
         return;
       }
       
       // Get all expenses for this rubric
-      const todasDespesas = await despesasAPI.getAll();
+      const todasDespesas = await despesasAPI.getAll({});
       const despesasDestaRubrica = todasDespesas.filter(d => d.rubrica_id === newDespesa.rubrica_id);
       
       // Calculate total spent on this rubric
       const totalGasto = despesasDestaRubrica.reduce((sum, d) => sum + d.valor, 0);
-      const orcamentoDisponivel = rubrica.valor - totalGasto;
+      const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
       
       // Check if the new expense would exceed the budget
       if (valorDespesa > orcamentoDisponivel) {
@@ -226,16 +228,41 @@ const Despesas: React.FC = () => {
 
   const handleApproval = async (despesaId: string, status: 'aprovada' | 'negada', comentario?: string) => {
     try {
+      if (!userProfile) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Erro',
+          message: 'Usuário não autenticado',
+          type: 'error'
+        });
+        return;
+      }
+
       await aprovacoesAPI.create({
         despesa_id: despesaId,
+        aprovado_por: userProfile.id,
+        role: userProfile.role,
         status,
         comentario
       });
       
       await fetchData();
       setShowDetailModal(false);
+      
+      setAlertDialog({
+        isOpen: true,
+        title: 'Sucesso',
+        message: `Despesa ${status === 'aprovada' ? 'aprovada' : 'negada'} com sucesso`,
+        type: 'success'
+      });
     } catch (error) {
       console.error('Error processing approval:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao processar aprovação. Por favor, tente novamente.',
+        type: 'error'
+      });
     }
   };
 
@@ -283,25 +310,25 @@ const Despesas: React.FC = () => {
       
       // Get the selected rubric and its total budget
       const rubrica = availableRubricas.find(r => r.id === editingDespesa.rubrica_id);
-      if (!rubrica) {
+      if (!rubrica || !rubrica.orcamento) {
         setAlertDialog({
           isOpen: true,
           title: 'Erro',
-          message: 'Rubrica não encontrada',
+          message: 'Rubrica não encontrada ou sem orçamento associado',
           type: 'error'
         });
         return;
       }
       
       // Get all expenses for this rubric except the current one being updated
-      const todasDespesas = await despesasAPI.getAll();
+      const todasDespesas = await despesasAPI.getAll({});
       const outrasDespesasDestaRubrica = todasDespesas.filter(
         d => d.rubrica_id === editingDespesa.rubrica_id && d.id !== selectedDespesa.id
       );
       
       // Calculate total spent on this rubric (excluding the current expense being updated)
       const totalGasto = outrasDespesasDestaRubrica.reduce((sum, d) => sum + d.valor, 0);
-      const orcamentoDisponivel = rubrica.valor - totalGasto;
+      const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
       
       // Check if the updated expense would exceed the budget
       if (valorDespesa > orcamentoDisponivel) {
@@ -1064,7 +1091,7 @@ const Despesas: React.FC = () => {
                         <span>Aprovar</span>
                       </button>
                       <button
-                        onClick={() => handleApproval(selectedDespesa.id, 'negada')}
+                        onClick={() => setShowRejectModal(true)}
                         className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-md flex items-center justify-center space-x-2 transition-colors"
                       >
                         <XCircle size={20} />
@@ -1079,6 +1106,86 @@ const Despesas: React.FC = () => {
         </div>
       )}
       
+      {/* Rejection Modal */}
+      {showRejectModal && selectedDespesa && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Rejeitar Despesa</h3>
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectionComment('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Tem certeza que deseja rejeitar a despesa <strong>{selectedDespesa.descricao}</strong>?
+                </p>
+                <p className="text-sm text-gray-500">
+                  Valor: <strong>Kz {selectedDespesa.valor.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Motivo da Rejeição <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectionComment}
+                  onChange={(e) => setRejectionComment(e.target.value)}
+                  placeholder="Descreva o motivo da rejeição..."
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent resize-none"
+                  required
+                />
+                {rejectionComment.trim() === '' && (
+                  <p className="mt-1 text-xs text-gray-500">O motivo da rejeição é obrigatório</p>
+                )}
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowRejectModal(false);
+                    setRejectionComment('');
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (rejectionComment.trim() === '') {
+                      setAlertDialog({
+                        isOpen: true,
+                        title: 'Erro',
+                        message: 'Por favor, informe o motivo da rejeição',
+                        type: 'error'
+                      });
+                      return;
+                    }
+                    handleApproval(selectedDespesa.id, 'negada', rejectionComment);
+                    setShowRejectModal(false);
+                    setRejectionComment('');
+                  }}
+                  disabled={rejectionComment.trim() === ''}
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  Confirmar Rejeição
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Custom Alert Dialog */}
       <AlertDialog
         isOpen={alertDialog.isOpen}

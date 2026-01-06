@@ -46,8 +46,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   const isSuperAdmin = userProfile?.role === 'admin' && !userProfile?.departamento_id;
-  const isFinanceManager = userProfile?.role === 'gestor' && userProfile?.departamento_id === '1';
-  const isFinanceAdmin = userProfile?.role === 'admin' && userProfile?.departamento_id === '1';
+  const isFinanceManager = userProfile?.role === 'gestor' && userProfile?.departamento_id === '9623C11E-2157-4D9C-8EAB-EBC1C7FD2685';
+  const isFinanceAdmin = userProfile?.role === 'admin' && userProfile?.departamento_id === '9623C11E-2157-4D9C-8EAB-EBC1C7FD2685';
 
   const filteredMenuItems = menuItems.filter(item => {
     // Check if user has the required role

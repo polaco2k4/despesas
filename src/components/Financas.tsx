@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { despesasAPI, rubricasAPI, departamentosAPI } from '../lib/mockApi';
+import { despesasAPI, rubricasAPI, departamentosAPI } from '../lib/backendApi';
 import type { Despesa, Rubrica, Departamento, DashboardStats, DespesaStatus } from '../types/database';
 import WithDepartmentAccess from './auth/withDepartmentAccess';
 import { 
@@ -1298,7 +1298,7 @@ const FinancasContent: React.FC = () => {
 const Financas: React.FC = () => {
   return (
     <WithDepartmentAccess 
-      allowedDepartments={['1']} // Only Finance department
+      allowedDepartments={['9623C11E-2157-4D9C-8EAB-EBC1C7FD2685']} // Only Finance department
       allowedRoles={['admin', 'gestor']} // Only admins and managers
       requireSuperAdmin={false} // Allow both super admins and finance department admins/managers
     >
