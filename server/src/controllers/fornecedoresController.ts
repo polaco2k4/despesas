@@ -4,7 +4,7 @@ import { executeQuery } from '../config/database.js';
 export const getAllFornecedores = async (req: Request, res: Response) => {
   try {
     const query = `
-      SELECT id, nome, nif, telefone, email, endereco, created_at, updated_at
+      SELECT id, nome, nif, telefone, email, endereco, categoria, status, created_at, updated_at
       FROM fornecedores
       ORDER BY nome
     `;
@@ -18,18 +18,26 @@ export const getAllFornecedores = async (req: Request, res: Response) => {
 
 export const createFornecedor = async (req: Request, res: Response) => {
   try {
-    const { nome, nif, telefone, email, endereco } = req.body;
+    const { nome, nif, telefone, email, endereco, categoria, status } = req.body;
     
     if (!nome) {
       return res.status(400).json({ error: 'Nome é obrigatório' });
     }
 
     const query = `
-      INSERT INTO fornecedores (nome, nif, telefone, email, endereco)
+      INSERT INTO fornecedores (nome, nif, telefone, email, endereco, categoria, status)
       OUTPUT INSERTED.*
-      VALUES (@nome, @nif, @telefone, @email, @endereco)
+      VALUES (@nome, @nif, @telefone, @email, @endereco, @categoria, @status)
     `;
-    const result = await executeQuery(query, { nome, nif, telefone, email, endereco });
+    const result = await executeQuery(query, { 
+      nome, 
+      nif, 
+      telefone, 
+      email, 
+      endereco, 
+      categoria: categoria || 'Geral',
+      status: status || 'ativo'
+    });
     
     res.status(201).json(result[0]);
   } catch (error) {
@@ -65,6 +73,14 @@ export const updateFornecedor = async (req: Request, res: Response) => {
     if (updates.endereco !== undefined) {
       fields.push('endereco = @endereco');
       params.endereco = updates.endereco;
+    }
+    if (updates.categoria !== undefined) {
+      fields.push('categoria = @categoria');
+      params.categoria = updates.categoria;
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = @status');
+      params.status = updates.status;
     }
     
     if (fields.length === 0) {
