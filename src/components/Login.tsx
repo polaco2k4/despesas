@@ -68,7 +68,7 @@ const Login: React.FC = () => {
             <div className="mx-auto h-16 w-16 bg-blue-600 rounded-lg flex items-center justify-center mb-4">
               <Building2 className="h-8 w-8 text-white" />
             </div>
-            <h2 className="text-3xl font-bold text-gray-900">Sistema Orçamental</h2>
+            <h2 className="text-3xl font-bold text-gray-900">Orçamento e Despesas</h2>
             <p className="text-gray-600 mt-2">Entre na sua conta</p>
           </div>
 
