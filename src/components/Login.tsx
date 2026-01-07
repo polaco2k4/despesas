@@ -47,11 +47,6 @@ const Login: React.FC = () => {
     }
   };
 
-  const testAccounts = [
-    { role: 'Administrador', email: 'ana@empresa.com', password: '123456' },
-    { role: 'Gestor', email: 'joao@empresa.com', password: '123456' },
-    { role: 'Colaborador', email: 'carlos@empresa.com', password: '123456' },
-  ];
 
   if (authLoading) {
     return (
@@ -140,33 +135,6 @@ const Login: React.FC = () => {
               )}
             </button>
           </form>
-        </div>
-
-        {/* Test Accounts */}
-        <div className="bg-white rounded-lg shadow-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Contas de Teste</h3>
-          <div className="space-y-3">
-            {testAccounts.map((account, index) => (
-              <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <div>
-                  <p className="font-medium text-gray-900">{account.role}</p>
-                  <p className="text-sm text-gray-600">{account.email}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setEmail(account.email);
-                    setPassword(account.password);
-                  }}
-                  className="px-3 py-1 text-sm bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
-                >
-                  Usar
-                </button>
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-gray-500 mt-4">
-            Clique em "Usar" para preencher automaticamente os campos de login.
-          </p>
         </div>
       </div>
     </div>
