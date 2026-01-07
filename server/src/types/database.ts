@@ -1,6 +1,7 @@
-export type UserRole = 'admin' | 'gestor' | 'colaborador';
-export type DespesaStatus = 'pendente' | 'aprovada' | 'rejeitada' | 'paga' | 'negada';
+export type UserRole = 'admin' | 'gestor' | 'colaborador' | 'adm_area';
+export type DespesaStatus = 'pendente_gestor' | 'pendente_admin' | 'pendente_adm_area' | 'aprovada' | 'rejeitada' | 'paga' | 'negada';
 export type AprovacaoStatus = 'aprovada' | 'negada';
+export type NivelAprovacao = 1 | 2 | 3;
 
 export interface Departamento {
   id: string;
@@ -69,6 +70,7 @@ export interface Aprovacao {
   role: string;
   status: AprovacaoStatus;
   comentario: string | null;
+  nivel_aprovacao: NivelAprovacao;
   aprovado_em: string;
 }
 

@@ -370,8 +370,11 @@ const Despesas: React.FC = () => {
     switch (status) {
       case 'aprovada':
       case 'paga': return 'text-green-600 bg-green-50';
-      case 'negada': return 'text-red-600 bg-red-50';
-      case 'pendente': return 'text-yellow-600 bg-yellow-50';
+      case 'negada':
+      case 'rejeitada': return 'text-red-600 bg-red-50';
+      case 'pendente_gestor':
+      case 'pendente_admin':
+      case 'pendente_adm_area': return 'text-yellow-600 bg-yellow-50';
       default: return 'text-gray-600 bg-gray-50';
     }
   };
@@ -381,13 +384,71 @@ const Despesas: React.FC = () => {
       case 'aprovada': return 'Aprovada';
       case 'paga': return 'Paga';
       case 'negada': return 'Negada';
-      case 'pendente': return 'Pendente';
+      case 'rejeitada': return 'Rejeitada';
+      case 'pendente_gestor': return 'Pendente - Gestor';
+      case 'pendente_admin': return 'Pendente - Admin';
+      case 'pendente_adm_area': return 'Pendente - ADM Área';
       default: return status;
     }
   };
 
+  const podeAprovarNivel = (userProfile: any, despesa: any) => {
+  console.log('🔍 podeAprovarNivel debug:', {
+    userProfile: userProfile ? {
+      id: userProfile.id,
+      role: userProfile.role,
+      departamento_id: userProfile.departamento_id
+    } : null,
+    despesa: despesa ? {
+      id: despesa.id,
+      status: despesa.status,
+      rubrica_orcamento_departamento_id: despesa.rubrica?.orcamento?.departamento_id
+    } : null
+  });
+
+  if (!userProfile || !despesa) {
+    console.log('❌ userProfile ou despesa é nulo');
+    return false;
+  }
+  
+  let resultado = false;
+  switch (despesa.status) {
+    case 'pendente_gestor':
+      resultado = userProfile.role === 'gestor' && userProfile.departamento_id === despesa.rubrica?.orcamento?.departamento_id;
+      console.log('📋 Verificando pendente_gestor:', {
+        userRole: userProfile.role,
+        userDepto: userProfile.departamento_id,
+        despesaDepto: despesa.rubrica?.orcamento?.departamento_id,
+        resultado
+      });
+      break;
+    case 'pendente_admin':
+      resultado = userProfile.role === 'admin';
+      console.log('📋 Verificando pendente_admin:', {
+        userRole: userProfile.role,
+        resultado
+      });
+      break;
+    case 'pendente_adm_area':
+      resultado = userProfile.role === 'adm_area' && userProfile.departamento_id === despesa.rubrica?.orcamento?.departamento_id;
+      console.log('📋 Verificando pendente_adm_area:', {
+        userRole: userProfile.role,
+        userDepto: userProfile.departamento_id,
+        despesaDepto: despesa.rubrica?.orcamento?.departamento_id,
+        resultado
+      });
+      break;
+    default:
+      console.log('📋 Status não reconhecido:', despesa.status);
+      resultado = false;
+  }
+  
+  console.log('✅ Resultado final podeAprovarNivel:', resultado);
+  return resultado;
+};
+
   const canCreateDespesa = userProfile?.role === 'colaborador';
-  const canApprove = userProfile?.role === 'gestor' || userProfile?.role === 'admin';
+  const canApprove = userProfile?.role === 'gestor' || userProfile?.role === 'admin' || userProfile?.role === 'adm_area';
 
   const filteredDespesas = despesas.filter(despesa => {
     const matchesSearch = despesa.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -451,9 +512,12 @@ const Despesas: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Todos os status</option>
-              <option value="pendente">Pendente</option>
+              <option value="pendente_gestor">Pendente - Gestor</option>
+              <option value="pendente_admin">Pendente - Admin</option>
+              <option value="pendente_adm_area">Pendente - ADM Área</option>
               <option value="aprovada">Aprovada</option>
               <option value="rejeitada">Rejeitada</option>
+              <option value="negada">Negada</option>
             </select>
           </div>
         </div>
@@ -539,7 +603,8 @@ const Despesas: React.FC = () => {
                           <Eye size={16} />
                         </button>
                         
-                        {despesa.usuario_id === userProfile?.id && despesa.status === 'pendente' && (
+                        {despesa.usuario_id === userProfile?.id && 
+         ['pendente_gestor', 'pendente_admin', 'pendente_adm_area', 'negada'].includes(despesa.status) && (
                           <button
                             onClick={() => handleDeleteDespesa(despesa.id)}
                             className="text-red-600 hover:text-red-700"
@@ -954,7 +1019,7 @@ const Despesas: React.FC = () => {
 
                 {/* Ações do usuário */}
                 {userProfile?.id === selectedDespesa.usuario_id && 
-                 ['pendente', 'negada'].includes(selectedDespesa.status) && (
+                 ['pendente_gestor', 'pendente_admin', 'pendente_adm_area', 'negada'].includes(selectedDespesa.status) && (
                   <div className="pt-4 border-t space-y-2">
                     <p className="text-sm text-gray-600 mb-2">
                       {selectedDespesa.status === 'negada' 
@@ -1080,7 +1145,7 @@ const Despesas: React.FC = () => {
                 </div>
 
                 {/* Approval Actions */}
-                {canApprove && selectedDespesa.status === 'pendente' && (
+                {podeAprovarNivel(userProfile, selectedDespesa) && (
                   <div className="border-t pt-4">
                     <div className="flex space-x-3">
                       <button

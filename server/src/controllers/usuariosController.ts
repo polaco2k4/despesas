@@ -99,6 +99,12 @@ export const createUsuario = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Senha é obrigatória' });
     }
 
+    // Validar se o role é permitido
+    const validRoles = ['admin', 'gestor', 'colaborador', 'adm_area'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Role inválido. Roles permitidos: admin, gestor, colaborador, adm_area' });
+    }
+
     // Temporariamente usando senha em texto plano até resolver problema com bcrypt
     // TODO: Implementar hash com bcrypt quando módulo funcionar
     const query = `
@@ -143,6 +149,11 @@ export const updateUsuario = async (req: Request, res: Response) => {
       params.email = updates.email;
     }
     if (updates.role !== undefined) {
+      // Validar se o role é permitido
+      const validRoles = ['admin', 'gestor', 'colaborador', 'adm_area'];
+      if (!validRoles.includes(updates.role)) {
+        return res.status(400).json({ error: 'Role inválido. Roles permitidos: admin, gestor, colaborador, adm_area' });
+      }
       fields.push('role = @role');
       params.role = updates.role;
     }

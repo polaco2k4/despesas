@@ -28,13 +28,19 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         r.nome as rubrica_nome,
         r.descricao as rubrica_descricao,
         r.valor as rubrica_valor,
+        o.id as orcamento_id,
+        o.departamento_id as orcamento_departamento_id,
+        dept.id as usuario_departamento_id,
+        dept.nome as usuario_departamento_nome,
         u.id as usuario_id_nested,
         u.nome as usuario_nome,
         u.email as usuario_email,
         u.role as usuario_role
       FROM despesas d
       LEFT JOIN rubricas r ON d.rubrica_id = r.id
+      LEFT JOIN orcamentos o ON r.orcamento_id = o.id
       LEFT JOIN usuarios u ON d.usuario_id = u.id
+      LEFT JOIN departamentos dept ON u.departamento_id = dept.id
       WHERE 1=1 ${whereClause}
       ORDER BY d.created_at DESC
     `;
@@ -103,13 +109,22 @@ export const getAllDespesas = async (req: Request, res: Response) => {
           id: row.rubrica_id_nested,
           nome: row.rubrica_nome,
           descricao: row.rubrica_descricao,
-          valor: row.rubrica_valor
+          valor: row.rubrica_valor,
+          orcamento: row.orcamento_id ? {
+            id: row.orcamento_id,
+            departamento_id: row.orcamento_departamento_id
+          } : undefined
         } : undefined,
         usuario: row.usuario_id_nested ? {
           id: row.usuario_id_nested,
           nome: row.usuario_nome,
           email: row.usuario_email,
-          role: row.usuario_role
+          role: row.usuario_role,
+          departamento_id: row.usuario_departamento_id,
+          departamento: row.usuario_departamento_id ? {
+            id: row.usuario_departamento_id,
+            nome: row.usuario_departamento_nome
+          } : undefined
         } : undefined,
         aprovacoes: despesaAprovacoes
       };
@@ -151,6 +166,16 @@ export const createDespesa = async (req: Request, res: Response) => {
   try {
     const { rubrica_id, usuario_id, descricao, valor, anexo_url, fornecedor_id } = req.body;
     
+    console.log('Creating despesa with data:', { 
+      rubrica_id, 
+      usuario_id, 
+      descricao, 
+      valor, 
+      anexo_url, 
+      fornecedor_id,
+      status: 'pendente_gestor'
+    });
+    
     if (!rubrica_id || !usuario_id || !descricao || valor === undefined) {
       return res.status(400).json({ error: 'Rubrica, usuário, descrição e valor são obrigatórios' });
     }
@@ -158,8 +183,11 @@ export const createDespesa = async (req: Request, res: Response) => {
     const query = `
       INSERT INTO despesas (rubrica_id, usuario_id, descricao, valor, status, anexo_url, fornecedor_id)
       OUTPUT INSERTED.*
-      VALUES (@rubrica_id, @usuario_id, @descricao, @valor, 'pendente', @anexo_url, @fornecedor_id)
+      VALUES (@rubrica_id, @usuario_id, @descricao, @valor, 'pendente_gestor', @anexo_url, @fornecedor_id)
     `;
+    
+    console.log('Executing query:', query);
+    
     const result = await executeQuery<Despesa>(query, {
       rubrica_id,
       usuario_id,
@@ -168,9 +196,15 @@ export const createDespesa = async (req: Request, res: Response) => {
       anexo_url,
       fornecedor_id
     });
+    
+    console.log('Despesa created successfully:', result[0]);
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating despesa:', error);
+    console.error('Error details:', error instanceof Error ? error.message : error);
+    if (error instanceof Error && error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
     res.status(500).json({ error: 'Erro ao criar despesa' });
   }
 };

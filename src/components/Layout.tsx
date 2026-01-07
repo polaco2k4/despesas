@@ -34,15 +34,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'gestor', 'colaborador'] },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
     { id: 'departamentos', label: 'Departamentos', icon: Building2, roles: ['admin'] },
     { id: 'usuarios', label: 'Utilizadores', icon: Users, roles: ['admin'] },
-    { id: 'orcamentos', label: 'Orçamentos', icon: PiggyBank, roles: ['admin', 'gestor'] },
-    { id: 'despesas', label: 'Despesas', icon: Receipt, roles: ['admin', 'gestor', 'colaborador'] },
+    { id: 'orcamentos', label: 'Orçamentos', icon: PiggyBank, roles: ['admin', 'gestor', 'adm_area'] },
+    { id: 'despesas', label: 'Despesas', icon: Receipt, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
     { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
     { id: 'fornecedores', label: 'Fornecedores', icon: Truck, roles: ['admin', 'gestor'] },
-    { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor'] },
-    { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador'] },
+    { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor', 'adm_area'] },
+    { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
   ];
 
   const isSuperAdmin = userProfile?.role === 'admin' && !userProfile?.departamento_id;
@@ -100,7 +100,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </div>
                 <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-gray-800 ${
                   userProfile?.role === 'admin' ? 'bg-green-500' : 
-                  userProfile?.role === 'gestor' ? 'bg-blue-500' : 'bg-amber-500'
+                  userProfile?.role === 'gestor' ? 'bg-blue-500' : 
+                  userProfile?.role === 'adm_area' ? 'bg-orange-500' :
+                  'bg-amber-500'
                 }`}></span>
               </div>
               <div className="flex-1 min-w-0">
@@ -113,10 +115,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <span className={`inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${
                   userProfile?.role === 'admin' ? 'bg-green-900/30 text-green-400' :
                   userProfile?.role === 'gestor' ? 'bg-blue-900/30 text-blue-400' :
+                  userProfile?.role === 'adm_area' ? 'bg-orange-900/30 text-orange-400' :
                   'bg-amber-900/30 text-amber-400'
                 }`}>
                   {userProfile?.role === 'admin' && 'Administrador'}
                   {userProfile?.role === 'gestor' && 'Gestor'}
+                  {userProfile?.role === 'adm_area' && 'ADM Área'}
                   {userProfile?.role === 'colaborador' && 'Colaborador'}
                 </span>
               </div>

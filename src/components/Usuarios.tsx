@@ -145,6 +145,7 @@ const Usuarios: React.FC = () => {
       case 'admin': return 'Administrador';
       case 'gestor': return 'Gestor';
       case 'colaborador': return 'Colaborador';
+      case 'adm_area': return 'ADM Área';
       default: return role;
     }
   };
@@ -231,6 +232,7 @@ const Usuarios: React.FC = () => {
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         usuario.role === 'admin' ? 'bg-blue-100 text-blue-800' :
                         usuario.role === 'gestor' ? 'bg-green-100 text-green-800' :
+                        usuario.role === 'adm_area' ? 'bg-orange-100 text-orange-800' :
                         'bg-purple-100 text-purple-800'
                       }`}>
                         {getRoleLabel(usuario.role)}
@@ -353,6 +355,7 @@ const Usuarios: React.FC = () => {
                 >
                   <option value="colaborador">Colaborador</option>
                   <option value="gestor">Gestor</option>
+                  <option value="adm_area">ADM Área</option>
                   <option value="admin">Administrador</option>
                 </select>
               </div>
