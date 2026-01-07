@@ -219,4 +219,14 @@ export const dashboardAPI = {
     const query = params.toString() ? `?${params.toString()}` : '';
     return fetchAPI<any>(`/dashboard/stats${query}`);
   },
+  
+  getDailyExpenses: (filters?: { userId?: string; userRole?: string; departamentoId?: string; period?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.userId) params.append('userId', filters.userId);
+    if (filters?.userRole) params.append('userRole', filters.userRole);
+    if (filters?.departamentoId) params.append('departamentoId', filters.departamentoId);
+    if (filters?.period) params.append('period', filters.period);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchAPI<any[]>(`/dashboard/daily-expenses${query}`);
+  },
 };

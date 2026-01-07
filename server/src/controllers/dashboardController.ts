@@ -4,7 +4,7 @@ import type { DashboardStats } from '../types/database.js';
 
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
-    const { userId, userRole, departamentoId } = req.query;
+    const { userRole, departamentoId } = req.query;
     
     let whereClause = '';
     const params: Record<string, any> = {};
@@ -55,5 +55,69 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     res.status(500).json({ error: 'Erro ao buscar estatísticas do dashboard' });
+  }
+};
+
+export const getDailyExpenses = async (req: Request, res: Response) => {
+  try {
+    const { userRole, departamentoId } = req.query;
+    
+    let whereClause = 'WHERE d.created_at >= DATEADD(day, -7, GETDATE())'; // Always get last 7 days for graph
+    const params: Record<string, any> = {};
+    
+    if (userRole !== 'admin' && departamentoId) {
+      whereClause += ' AND o.departamento_id = @departamento_id';
+      params.departamento_id = departamentoId;
+    }
+    
+    const query = `
+      SELECT 
+        CAST(d.created_at AS DATE) as date,
+        SUM(d.valor) as total,
+        COUNT(*) as count
+      FROM despesas d
+      LEFT JOIN rubricas r ON d.rubrica_id = r.id
+      LEFT JOIN orcamentos o ON r.orcamento_id = o.id
+      ${whereClause}
+      GROUP BY CAST(d.created_at AS DATE)
+      ORDER BY date DESC
+    `;
+    
+    const result = await executeQuery(query, params);
+    
+    // Generate last 7 days with data
+    const dailyData = [];
+    const today = new Date();
+    const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      // Format date to match SQL Server date format (YYYY-MM-DD)
+      const dateStr = date.getFullYear() + '-' + 
+        String(date.getMonth() + 1).padStart(2, '0') + '-' + 
+        String(date.getDate()).padStart(2, '0');
+      
+      // Find matching data from database results
+      const dayData = result.find((row: any) => {
+        const dbDate = new Date(row.date);
+        const dbDateStr = dbDate.getFullYear() + '-' + 
+          String(dbDate.getMonth() + 1).padStart(2, '0') + '-' + 
+          String(dbDate.getDate()).padStart(2, '0');
+        return dbDateStr === dateStr;
+      });
+      
+      dailyData.push({
+        day: daysOfWeek[date.getDay()],
+        date: dateStr,
+        total: dayData?.total || 0,
+        count: dayData?.count || 0
+      });
+    }
+    
+    res.json(dailyData);
+  } catch (error) {
+    console.error('Error fetching daily expenses:', error);
+    res.status(500).json({ error: 'Erro ao buscar despesas diárias' });
   }
 };

@@ -16,18 +16,23 @@ const Dashboard: React.FC = () => {
   const { userProfile } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentDespesas, setRecentDespesas] = useState<Despesa[]>([]);
+  const [dailyExpenses, setDailyExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState('30');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsData, despesasData] = await Promise.all([
+        const [statsData, despesasData, dailyData] = await Promise.all([
           dashboardAPI.getStats(),
-          despesasAPI.getAll({})
+          despesasAPI.getAll({}),
+          dashboardAPI.getDailyExpenses({ period: selectedPeriod })
         ]);
         
+        console.log('Dashboard data received:', { statsData, dailyData });
         setStats(statsData);
         setRecentDespesas(despesasData.slice(0, 5));
+        setDailyExpenses(dailyData);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -36,7 +41,7 @@ const Dashboard: React.FC = () => {
     };
 
     fetchData();
-  }, []);
+  }, [selectedPeriod]);
 
   if (loading) {
     return (
@@ -174,10 +179,14 @@ const Dashboard: React.FC = () => {
             <p className="text-sm text-gray-500">Acompanhe a utilização do seu orçamento</p>
           </div>
           <div className="mt-2 md:mt-0">
-            <select className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-              <option>Últimos 30 dias</option>
-              <option>Últimos 90 dias</option>
-              <option>Este ano</option>
+            <select 
+              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+            >
+              <option value="30">Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="365">Este ano</option>
             </select>
           </div>
         </div>
@@ -185,20 +194,50 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <div className="h-64 bg-gray-50 rounded-lg p-4">
-              {/* Gráfico de barras placeholder */}
-              <div className="h-full flex items-end space-x-2">
-                {[30, 50, 70, 90, 60, 80, 65].map((value, index) => (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div 
-                      className="w-full bg-gradient-to-t from-blue-500 to-cyan-400 rounded-t-sm"
-                      style={{ height: `${value}%` }}
-                    ></div>
-                    <span className="text-xs text-gray-500 mt-1">
-                      {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][index]}
-                    </span>
+              {/* Gráfico de barras com dados reais */}
+              {dailyExpenses.length > 0 ? (
+                <div className="h-40 flex items-end space-x-2">
+                  {dailyExpenses.map((day, index) => {
+                    const maxValue = Math.max(...dailyExpenses.map(d => d.total), 1);
+                    const heightPercentage = maxValue > 0 ? (day.total / maxValue) * 100 : 0;
+                    const hasData = day.total > 0;
+                    
+                    // Calculate actual pixel height (container is h-40 = 160px)
+                    const pixelHeight = hasData ? Math.max((heightPercentage / 100) * 160, 20) : 8;
+                    
+                    console.log(`Day ${index}: ${day.day}, total: ${day.total}, heightPercentage: ${heightPercentage}%, pixelHeight: ${pixelHeight}px, hasData: ${hasData}`);
+                    
+                    return (
+                      <div key={index} className="flex-1 flex flex-col items-center justify-end">
+                        <div 
+                          className={`w-full rounded-t-sm transition-all duration-300 ${
+                            hasData 
+                              ? 'bg-gradient-to-t from-blue-500 to-cyan-400' 
+                              : 'bg-gray-300'
+                          }`}
+                          style={{ 
+                            height: `${pixelHeight}px`
+                          }}
+                          title={`${day.day}: Kz ${day.total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        ></div>
+                        <span className="text-xs text-gray-500 mt-1">
+                          {day.day}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                      <BarChart3 className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <p className="text-sm text-gray-500">Sem dados para exibir</p>
+                    <p className="text-xs text-gray-400 mt-1">Não há despesas registradas neste período</p>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
           </div>
           
