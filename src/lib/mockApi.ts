@@ -382,7 +382,7 @@ export const despesasAPI = {
     const newDespesa: Despesa = {
       ...despesa,
       id: novoId,
-      status: 'pendente',
+      status: 'pendente_gestor',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -594,7 +594,7 @@ export const dashboardAPI = {
     const totalDespesas = despesas.reduce((sum, d) => sum + (d.status === 'aprovada' || d.status === 'paga' ? d.valor : 0), 0);
     const utilizacaoOrcamento = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
     const totalPago = despesas.filter(d => d.status === 'paga').reduce((sum, d) => sum + d.valor, 0);
-    const totalPendente = despesas.filter(d => d.status === 'pendente').reduce((sum, d) => sum + d.valor, 0);
+    const totalPendente = despesas.filter(d => d.status === 'pendente_gestor').reduce((sum, d) => sum + d.valor, 0);
     const totalNegado = despesas.filter(d => d.status === 'negada').reduce((sum, d) => sum + d.valor, 0);
     const totalAprovado = despesas.filter(d => d.status === 'aprovada').reduce((sum, d) => sum + d.valor, 0);
 

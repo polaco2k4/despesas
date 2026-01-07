@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { despesasAPI, rubricasAPI, departamentosAPI } from '../lib/backendApi';
 import type { Despesa, Rubrica, Departamento, DashboardStats, DespesaStatus } from '../types/database';
 import WithDepartmentAccess from './auth/withDepartmentAccess';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Search, 
   XCircle, 
@@ -42,6 +43,7 @@ interface Estatisticas {
 }
 
 const FinancasContent: React.FC = () => {
+  const { userProfile } = useAuth();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [rubricas, setRubricas] = useState<Rubrica[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -108,7 +110,7 @@ const FinancasContent: React.FC = () => {
       setLoading(true);
       // Buscar despesas com status pendente, aprovada, paga e negada
       const [pendentes, aprovadas, pagas, negadas] = await Promise.all([
-        despesasAPI.getAll({ ...filtrosAtuais, status: 'pendente' }),
+        despesasAPI.getAll({ ...filtrosAtuais, status: 'pendente_gestor' }),
         despesasAPI.getAll({ ...filtrosAtuais, status: 'aprovada' }),
         despesasAPI.getAll({ ...filtrosAtuais, status: 'paga' }),
         despesasAPI.getAll({ ...filtrosAtuais, status: 'negada' })
@@ -201,7 +203,7 @@ const FinancasContent: React.FC = () => {
       setStats({
         totalOrcamento: 0, // Será calculado com base nas rubricas
         totalDespesas: despesas.reduce((sum, d) => sum + d.valor, 0),
-        despesasPendentes: despesas.filter(d => d.status === 'pendente').length,
+        despesasPendentes: despesas.filter(d => d.status === 'pendente_gestor').length,
         despesasAprovadas: despesas.filter(d => d.status === 'aprovada').length,
         despesasNegadas: despesas.filter(d => d.status === 'negada').length,
         utilizacaoOrcamento: 0 // Será calculado com base no orçamento total
@@ -221,7 +223,7 @@ const FinancasContent: React.FC = () => {
       .reduce((sum, d) => sum + d.valor, 0);
       
     const totalPendente = despesasFiltradas
-      .filter(d => d.status === 'pendente')
+      .filter(d => d.status === 'pendente_gestor')
       .reduce((sum, d) => sum + d.valor, 0);
       
     const totalNegado = despesasFiltradas
@@ -258,7 +260,7 @@ const FinancasContent: React.FC = () => {
       porRubricaMap.set(rubricaNome, {
         valor: rubricaAtual.valor + d.valor,
         pago: rubricaAtual.pago + (d.status === 'paga' ? d.valor : 0),
-        pendente: rubricaAtual.pendente + (d.status === 'pendente' ? d.valor : 0),
+        pendente: rubricaAtual.pendente + (d.status === 'pendente_gestor' ? d.valor : 0),
         aprovado: rubricaAtual.aprovado + (d.status === 'aprovada' ? d.valor : 0),
         negado: rubricaAtual.negado + (d.status === 'negada' ? d.valor : 0)
       });
@@ -345,6 +347,10 @@ const FinancasContent: React.FC = () => {
 
   const handlePagarDespesa = async (despesaId: string) => {
     if (!window.confirm('Confirmar pagamento desta despesa?')) return;
+    if (!userProfile) {
+      setMessage({ text: 'Erro: usuário não autenticado', type: 'error' });
+      return;
+    }
     
     try {
       setIsProcessing(true);
@@ -354,11 +360,12 @@ const FinancasContent: React.FC = () => {
       // Obter a data atual no formato ISO
       const dataPagamento = new Date().toISOString();
       
-      // Atualizar a despesa com a data de pagamento e status 'paga'
+      // Atualizar a despesa com a data de pagamento, status 'paga' e quem pagou
       await despesasAPI.update(despesaId, { 
         status: 'paga' as DespesaStatus,
         descricao: despesa.descricao, // Mantemos a descrição original
         data_pagamento: dataPagamento,
+        pago_por: userProfile.id, // Adicionar quem fez o pagamento
         updated_at: new Date().toISOString()
       });
       
@@ -956,7 +963,7 @@ const FinancasContent: React.FC = () => {
                             ? 'Pago' 
                             : despesa.status === 'negada' 
                               ? 'Negado' 
-                              : 'Pendente'}
+                              : 'Pendente_Gestor'}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -1064,7 +1071,7 @@ const FinancasContent: React.FC = () => {
                       ? 'Pago' 
                       : selectedDespesa.status === 'negada' 
                         ? 'Negado' 
-                        : 'Pendente'}
+                        : 'Pendente_Gestor'}
                   </span>
                 </div>
                 <div>
@@ -1088,6 +1095,17 @@ const FinancasContent: React.FC = () => {
                     )}
                   </p>
                 </div>
+                {selectedDespesa.status === 'paga' && selectedDespesa.pago_por_usuario && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Pago por</h4>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {selectedDespesa.pago_por_usuario.nome || 'N/A'}
+                      {selectedDespesa.pago_por_usuario.email && (
+                        <span className="block text-xs text-gray-500">{selectedDespesa.pago_por_usuario.email}</span>
+                      )}
+                    </p>
+                  </div>
+                )}
                 {selectedDespesa.anexo_url && (
                   <div className="md:col-span-2">
                     <h4 className="text-sm font-medium text-gray-500">Anexo</h4>
@@ -1145,7 +1163,10 @@ const FinancasContent: React.FC = () => {
                             <p className="text-sm font-medium text-gray-900">
                               {aprovacao.aprovador?.nome || 'Sistema'}
                               <span className="text-xs font-normal text-gray-500 ml-2">
-                                ({aprovacao.role === 'gestor' ? 'Gestor' : 'Financeiro'})
+                                ({aprovacao.aprovador?.departamento?.nome === 'Finanças' ? 'Financeiro' : 
+                                  aprovacao.role === 'admin' ? 'Administrador' : 
+                                  aprovacao.role === 'adm_area' ? 'Administrador de Área' : 
+                                  aprovacao.role === 'gestor' ? 'Gestor' : 'Colaborador'})
                               </span>
                             </p>
                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1173,6 +1194,32 @@ const FinancasContent: React.FC = () => {
                         </div>
                       );
                     })}
+                    
+                    {/* Show payment information if the expense is paid and has pago_por_usuario */}
+                    {selectedDespesa.status === 'paga' && selectedDespesa.pago_por_usuario && (
+                      <div className="border-l-4 border-green-200 pl-4 py-2 bg-green-50 rounded-r">
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm font-medium text-gray-900">
+                            {selectedDespesa.pago_por_usuario.nome}
+                            <span className="text-xs font-normal text-gray-500 ml-2">
+                              ({selectedDespesa.pago_por_usuario.departamento?.nome === 'Finanças' ? 'Financeiro' : 
+                                selectedDespesa.pago_por_usuario.role === 'admin' ? 'Administrador' : 
+                                selectedDespesa.pago_por_usuario.role === 'adm_area' ? 'Administrador de Área' : 
+                                selectedDespesa.pago_por_usuario.role === 'gestor' ? 'Gestor' : 'Colaborador'})
+                            </span>
+                          </p>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Pagamento Efetuado
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {selectedDespesa.data_pagamento 
+                            ? new Date(selectedDespesa.data_pagamento).toLocaleString('pt-AO')
+                            : new Date(selectedDespesa.updated_at).toLocaleString('pt-AO')
+                          }
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-gray-500">Nenhum histórico de aprovação disponível.</p>
@@ -1181,7 +1228,7 @@ const FinancasContent: React.FC = () => {
 
               <div className="mt-6 flex justify-between">
                 <div>
-                  {selectedDespesa.status === 'pendente' && (
+                  {selectedDespesa.status === 'pendente_gestor' && (
                     <>
                       <button
                         type="button"

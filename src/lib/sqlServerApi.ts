@@ -374,7 +374,7 @@ export const despesasAPI = {
     const query = `
       INSERT INTO despesas (rubrica_id, usuario_id, descricao, valor, status, anexo_url, fornecedor_id)
       OUTPUT INSERTED.*
-      VALUES (@rubrica_id, @usuario_id, @descricao, @valor, 'pendente', @anexo_url, @fornecedor_id)
+      VALUES (@rubrica_id, @usuario_id, @descricao, @valor, 'pendente_gestor', @anexo_url, @fornecedor_id)
     `;
     const result = await executeQuery<Despesa>(query, {
       rubrica_id: despesa.rubrica_id,
@@ -489,10 +489,10 @@ export const dashboardAPI = {
         ISNULL(SUM(o.valor_total), 0) as totalOrcamento,
         ISNULL(SUM(CASE WHEN d.status IN ('aprovada', 'paga') THEN d.valor ELSE 0 END), 0) as totalDespesas,
         ISNULL(SUM(CASE WHEN d.status = 'paga' THEN d.valor ELSE 0 END), 0) as totalPago,
-        ISNULL(SUM(CASE WHEN d.status = 'pendente' THEN d.valor ELSE 0 END), 0) as totalPendente,
+        ISNULL(SUM(CASE WHEN d.status = 'pendente_gestor' THEN d.valor ELSE 0 END), 0) as totalPendente,
         ISNULL(SUM(CASE WHEN d.status = 'negada' THEN d.valor ELSE 0 END), 0) as totalNegado,
         ISNULL(SUM(CASE WHEN d.status = 'aprovada' THEN d.valor ELSE 0 END), 0) as totalAprovado,
-        COUNT(CASE WHEN d.status = 'pendente' THEN 1 END) as despesasPendentes,
+        COUNT(CASE WHEN d.status = 'pendente_gestor' THEN 1 END) as despesasPendentes,
         COUNT(CASE WHEN d.status IN ('aprovada', 'paga') THEN 1 END) as despesasAprovadas,
         COUNT(CASE WHEN d.status = 'negada' THEN 1 END) as despesasNegadas
       FROM orcamentos o

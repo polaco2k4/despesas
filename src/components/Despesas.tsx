@@ -341,8 +341,8 @@ const Despesas: React.FC = () => {
         return;
       }
       
-      // If the expense was rejected, change status to 'pendente' when updating
-      const statusAtualizado = selectedDespesa.status === 'negada' ? 'pendente' : selectedDespesa.status;
+      // If the expense was rejected or has invalid 'pendente' status, change to 'pendente_gestor' when updating
+      const statusAtualizado = (selectedDespesa.status === 'negada' || selectedDespesa.status === 'pendente') ? 'pendente_gestor' : selectedDespesa.status;
       
       const despesaData = {
         rubrica_id: editingDespesa.rubrica_id,
@@ -352,6 +352,12 @@ const Despesas: React.FC = () => {
         status: statusAtualizado, // Atualiza o status se necessário
         anexo_url: editingDespesa.anexo_url
       };
+
+      console.log('Sending despesa update:', {
+        originalStatus: selectedDespesa.status,
+        newStatus: statusAtualizado,
+        despesaData
+      });
 
       // Atualiza a despesa existente em vez de criar uma nova
       await despesasAPI.update(selectedDespesa.id, despesaData);
@@ -1002,6 +1008,18 @@ const Despesas: React.FC = () => {
                   <p className="text-gray-900">{new Date(selectedDespesa.created_at).toLocaleString('pt-PT')}</p>
                 </div>
 
+                {selectedDespesa.status === 'paga' && selectedDespesa.pago_por_usuario && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Pago por</label>
+                    <p className="text-gray-900">
+                      {selectedDespesa.pago_por_usuario.nome}
+                      {selectedDespesa.pago_por_usuario.email && (
+                        <span className="block text-xs text-gray-500">{selectedDespesa.pago_por_usuario.email}</span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
                 {selectedDespesa.anexo_url && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Anexo</label>
@@ -1080,7 +1098,10 @@ const Despesas: React.FC = () => {
                               <p className="text-sm font-medium text-gray-900">
                                 {aprovacao.aprovador?.nome || 'Sistema'}
                                 <span className="text-xs font-normal text-gray-500 ml-2">
-                                  ({aprovacao.role === 'admin' ? 'Administrador' : 'Gestor'})
+                                  ({aprovacao.aprovador?.departamento?.nome === 'Finanças' ? 'Financeiro' : 
+                                    aprovacao.role === 'admin' ? 'Administrador' : 
+                                    aprovacao.role === 'adm_area' ? 'Administrador de Área' : 
+                                    aprovacao.role === 'gestor' ? 'Gestor' : 'Colaborador'})
                                 </span>
                               </p>
                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -1114,17 +1135,20 @@ const Despesas: React.FC = () => {
                     )}
 
                     {/* Show payment information if the expense is paid */}
-                    {selectedDespesa.status === 'paga' && (
+                    {selectedDespesa.status === 'paga' && selectedDespesa.pago_por_usuario && (
                       <div className="border-l-4 border-green-200 pl-4 py-2 bg-green-50 rounded-r">
                         <div className="flex justify-between items-center">
                           <p className="text-sm font-medium text-gray-900">
-                            {selectedDespesa.aprovacoes?.find(a => a.status === 'aprovada')?.aprovador?.nome || 'Sistema'}
+                            {selectedDespesa.pago_por_usuario.nome}
                             <span className="text-xs font-normal text-gray-500 ml-2">
-                              (Financeiro)
+                              ({selectedDespesa.pago_por_usuario.departamento?.nome === 'Finanças' ? 'Financeiro' : 
+                                selectedDespesa.pago_por_usuario.role === 'admin' ? 'Administrador' : 
+                                selectedDespesa.pago_por_usuario.role === 'adm_area' ? 'Administrador de Área' : 
+                                selectedDespesa.pago_por_usuario.role === 'gestor' ? 'Gestor' : 'Colaborador'})
                             </span>
                           </p>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Pagamento processado
+                            Pagamento Efetuado
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-gray-500">
@@ -1132,13 +1156,6 @@ const Despesas: React.FC = () => {
                             ? `Efetuado em: ${new Date(selectedDespesa.data_pagamento).toLocaleString('pt-PT')}`
                             : 'Data de pagamento não disponível'}
                         </p>
-                        {selectedDespesa.aprovacoes?.find(a => a.status === 'paga')?.comentario && (
-                          <div className="mt-2 p-2 bg-white rounded border border-gray-200">
-                            <p className="text-sm text-gray-700">
-                              {selectedDespesa.aprovacoes.find(a => a.status === 'paga')?.comentario}
-                            </p>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>

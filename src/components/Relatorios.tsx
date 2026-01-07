@@ -230,7 +230,7 @@ const Relatorios: React.FC = () => {
   };
 
   const getStatusStats = () => {
-    const pendentes = filteredDespesas.filter(d => d.status === 'pendente').length;
+    const pendentes = filteredDespesas.filter(d => d.status === 'pendente_gestor').length;
     const aprovadas = filteredDespesas.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
     const negadas = filteredDespesas.filter(d => d.status === 'negada').length;
     
@@ -343,7 +343,7 @@ const Relatorios: React.FC = () => {
   const totalOrcamento = filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0);
   const totalDespesas = filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
   const utilizacao = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
-  const totalPendentes = filteredDespesas.filter(d => d.status === 'pendente').length;
+  const totalPendentes = filteredDespesas.filter(d => d.status === 'pendente_gestor').length;
   const totalAprovadas = filteredDespesas.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const totalNegadas = filteredDespesas.filter(d => d.status === 'negada').length;
@@ -727,7 +727,7 @@ const Relatorios: React.FC = () => {
                       <span className="mx-2">•</span>
                       <span className={`px-2 py-0.5 rounded-full text-xs ${
                         despesa.status === 'aprovada' ? 'bg-green-100 text-green-800' :
-                        despesa.status === 'pendente' ? 'bg-yellow-100 text-yellow-800' :
+                        despesa.status === 'pendente_gestor' ? 'bg-yellow-100 text-yellow-800' :
                         'bg-red-100 text-red-800'
                       }`}>
                         {despesa.status.charAt(0).toUpperCase() + despesa.status.slice(1)}
@@ -804,7 +804,7 @@ const Relatorios: React.FC = () => {
                       }`}>
                         {despesa.status === 'aprovada' ? 'Aprovada' :
                          despesa.status === 'paga' ? 'Paga' :
-                         despesa.status === 'negada' ? 'Negada' : 'Pendente'}
+                         despesa.status === 'negada' ? 'Negada' : 'Pendente_Gestor'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">

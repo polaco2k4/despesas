@@ -56,10 +56,12 @@ export interface Despesa {
   data_pagamento?: string | null;
   motivo_rejeicao?: string | null;
   fornecedor_id?: string | null;
+  pago_por?: string | null;
   created_at: string;
   updated_at: string;
   rubrica?: Rubrica;
   usuario?: Usuario;
+  pago_por_usuario?: Usuario;
   aprovacoes?: Aprovacao[];
 }
 

@@ -20,7 +20,14 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    throw new Error(`API Error: ${response.statusText}`);
+    const errorText = await response.text();
+    console.error('API Error Details:', {
+      status: response.status,
+      statusText: response.statusText,
+      url: `${API_BASE_URL}${endpoint}`,
+      errorBody: errorText
+    });
+    throw new Error(`API Error: ${response.statusText} - ${errorText}`);
   }
 
   // Handle 204 No Content responses

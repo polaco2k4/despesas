@@ -22,7 +22,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
     const query = `
       SELECT 
         d.id, d.rubrica_id, d.usuario_id, d.descricao, d.valor, d.status,
-        d.anexo_url, d.data_pagamento, d.motivo_rejeicao, d.fornecedor_id,
+        d.anexo_url, d.data_pagamento, d.motivo_rejeicao, d.fornecedor_id, d.pago_por,
         d.created_at, d.updated_at,
         r.id as rubrica_id_nested,
         r.nome as rubrica_nome,
@@ -35,12 +35,17 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         u.id as usuario_id_nested,
         u.nome as usuario_nome,
         u.email as usuario_email,
-        u.role as usuario_role
+        u.role as usuario_role,
+        pago_u.id as pago_por_id,
+        pago_u.nome as pago_por_nome,
+        pago_u.email as pago_por_email,
+        pago_u.role as pago_por_role
       FROM despesas d
       LEFT JOIN rubricas r ON d.rubrica_id = r.id
       LEFT JOIN orcamentos o ON r.orcamento_id = o.id
       LEFT JOIN usuarios u ON d.usuario_id = u.id
       LEFT JOIN departamentos dept ON u.departamento_id = dept.id
+      LEFT JOIN usuarios pago_u ON d.pago_por = pago_u.id
       WHERE 1=1 ${whereClause}
       ORDER BY d.created_at DESC
     `;
@@ -103,6 +108,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         data_pagamento: row.data_pagamento,
         motivo_rejeicao: row.motivo_rejeicao,
         fornecedor_id: row.fornecedor_id,
+        pago_por: row.pago_por,
         created_at: row.created_at,
         updated_at: row.updated_at,
         rubrica: row.rubrica_id_nested ? {
@@ -125,6 +131,12 @@ export const getAllDespesas = async (req: Request, res: Response) => {
             id: row.usuario_departamento_id,
             nome: row.usuario_departamento_nome
           } : undefined
+        } : undefined,
+        pago_por_usuario: row.pago_por_id ? {
+          id: row.pago_por_id,
+          nome: row.pago_por_nome,
+          email: row.pago_por_email,
+          role: row.pago_por_role
         } : undefined,
         aprovacoes: despesaAprovacoes
       };
@@ -214,6 +226,8 @@ export const updateDespesa = async (req: Request, res: Response) => {
     const { id } = req.params;
     const updates = req.body;
     
+    console.log('Updating despesa:', { id, updates });
+    
     const fields = [];
     const params: Record<string, any> = { id };
     
@@ -233,6 +247,10 @@ export const updateDespesa = async (req: Request, res: Response) => {
       fields.push('status = @status');
       params.status = updates.status;
     }
+    if (updates.fornecedor_id !== undefined) {
+      fields.push('fornecedor_id = @fornecedor_id');
+      params.fornecedor_id = updates.fornecedor_id;
+    }
     if (updates.anexo_url !== undefined) {
       fields.push('anexo_url = @anexo_url');
       params.anexo_url = updates.anexo_url;
@@ -240,6 +258,10 @@ export const updateDespesa = async (req: Request, res: Response) => {
     if (updates.data_pagamento !== undefined) {
       fields.push('data_pagamento = @data_pagamento');
       params.data_pagamento = updates.data_pagamento;
+    }
+    if (updates.pago_por !== undefined) {
+      fields.push('pago_por = @pago_por');
+      params.pago_por = updates.pago_por;
     }
     if (updates.motivo_rejeicao !== undefined) {
       fields.push('motivo_rejeicao = @motivo_rejeicao');

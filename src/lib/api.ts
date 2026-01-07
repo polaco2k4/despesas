@@ -283,7 +283,7 @@ export const despesasAPI = {
   create: async (despesa: Omit<Despesa, 'id' | 'created_at' | 'updated_at' | 'status'>): Promise<Despesa> => {
     const { data, error } = await supabase
       .from('despesas')
-      .insert({ ...despesa, status: 'pendente' })
+      .insert({ ...despesa, status: 'pendente_gestor' })
       .select(`
         *,
         usuario:usuarios(*),
@@ -416,7 +416,7 @@ export const dashboardAPI = {
 
     const totalOrcamento = orcamentosResult.data.reduce((sum, o) => sum + o.valor_total, 0);
     const totalDespesas = despesasResult.data.reduce((sum, d) => sum + (d.status === 'aprovada' || d.status === 'paga' ? d.valor : 0), 0);
-    const despesasPendentes = despesasResult.data.filter(d => d.status === 'pendente').length;
+    const despesasPendentes = despesasResult.data.filter(d => d.status === 'pendente_gestor').length;
     const despesasAprovadas = despesasResult.data.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
     const despesasNegadas = despesasResult.data.filter(d => d.status === 'negada').length;
     const utilizacaoOrcamento = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
