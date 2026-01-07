@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { fornecedoresAPI } from '../lib/mockApi';
+import { fornecedoresAPI } from '../lib/backendApi';
 import type { Fornecedor } from '../data/mockData';
 import { 
   Plus, 
@@ -427,7 +427,7 @@ const Fornecedores: React.FC = () => {
                 <input
                   type="text"
                   value={newFornecedor.nif}
-                  onChange={(e) => setNewFornecedor({ ...newForcedor, nif: e.target.value })}
+                  onChange={(e) => setNewFornecedor({ ...newFornecedor, nif: e.target.value })}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="123456789"
@@ -441,7 +441,7 @@ const Fornecedores: React.FC = () => {
                 <input
                   type="text"
                   value={newFornecedor.categoria}
-                  onChange={(e) => setNewForcedor({ ...newForcedor, categoria: e.target.value })}
+                  onChange={(e) => setNewFornecedor({ ...newFornecedor, categoria: e.target.value })}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Categoria do fornecedor"
