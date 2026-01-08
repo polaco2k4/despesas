@@ -20,7 +20,9 @@ import {
   PieChart,
   CalendarDays,
   FilterX,
-  Eye
+  Eye,
+  Check,
+  X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
@@ -82,6 +84,8 @@ const FinancasContent: React.FC = () => {
     utilizacaoOrcamento: 0
   });
   const [showRelatorios, setShowRelatorios] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -118,6 +122,9 @@ const FinancasContent: React.FC = () => {
       
       // Combinar todas as despesas
       const data = [...pendentes, ...aprovadas, ...pagas, ...negadas];
+      
+      // Ordenar por data mais recente (created_at em ordem decrescente)
+      data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
       // Aplicar filtros adicionais
       let filteredData = [...data];
@@ -159,6 +166,9 @@ const FinancasContent: React.FC = () => {
       }
       
       setDespesas(filteredData);
+      
+      // Resetar para primeira página quando os dados mudam
+      setCurrentPage(1);
       
       // Atualizar estatísticas após filtrar
       calcularEstatisticas(filteredData);
@@ -493,6 +503,12 @@ const FinancasContent: React.FC = () => {
     return matchesSearch && matchesValorMin && matchesValorMax && 
            matchesRubrica && matchesDataInicio && matchesDataFim;
   });
+
+  // Paginação
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredDespesas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredDespesas.length / itemsPerPage);
   
   // Funções de exportação
   const exportarParaExcel = () => {
@@ -917,8 +933,8 @@ const FinancasContent: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredDespesas.length > 0 ? (
-                filteredDespesas.map((despesa) => (
+              {currentItems.length > 0 ? (
+                currentItems.map((despesa) => (
                   <tr key={despesa.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -1020,6 +1036,100 @@ const FinancasContent: React.FC = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div className="flex-1 flex justify-between sm:hidden">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+            </div>
+            <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm text-gray-700">
+                  Mostrando <span className="font-medium">{indexOfFirstItem + 1}</span> a{' '}
+                  <span className="font-medium">
+                    {Math.min(indexOfLastItem, filteredDespesas.length)}
+                  </span>{' '}
+                  de <span className="font-medium">{filteredDespesas.length}</span> resultados
+                </p>
+              </div>
+              <div>
+                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Previous</span>
+                    <ChevronDown className="h-5 w-5 transform rotate-90" />
+                  </button>
+                  
+                  {/* Page numbers */}
+                  {[...Array(totalPages)].map((_, index) => {
+                    const pageNumber = index + 1;
+                    const isCurrentPage = pageNumber === currentPage;
+                    const showPage = pageNumber === 1 || pageNumber === totalPages || 
+                                   (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1);
+                    
+                    if (!showPage && pageNumber === currentPage - 2) {
+                      return (
+                        <span key={pageNumber} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                          ...
+                        </span>
+                      );
+                    }
+                    
+                    if (!showPage && pageNumber === currentPage + 2) {
+                      return (
+                        <span key={pageNumber} className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700">
+                          ...
+                        </span>
+                      );
+                    }
+                    
+                    if (!showPage) return null;
+                    
+                    return (
+                      <button
+                        key={pageNumber}
+                        onClick={() => setCurrentPage(pageNumber)}
+                        className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                          isCurrentPage
+                            ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                            : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        {pageNumber}
+                      </button>
+                    );
+                  })}
+                  
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <span className="sr-only">Next</span>
+                    <ChevronDown className="h-5 w-5 transform -rotate-90" />
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Details Modal */}
@@ -1226,31 +1336,7 @@ const FinancasContent: React.FC = () => {
                 )}
               </div>
 
-              <div className="mt-6 flex justify-between">
-                <div>
-                  {selectedDespesa.status === 'pendente_gestor' && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setShowApprovalModal(true)}
-                        className="mr-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                        disabled={isProcessing}
-                      >
-                        <Check className="h-4 w-4 inline mr-1" />
-                        Aprovar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenRejectionModal(selectedDespesa)}
-                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                        disabled={isProcessing}
-                      >
-                        <X className="h-4 w-4 inline mr-1" />
-                        Rejeitar
-                      </button>
-                    </>
-                  )}
-                </div>
+              <div className="mt-6 flex justify-end">
                 <button
                   type="button"
                   onClick={() => setShowDetailsModal(false)}

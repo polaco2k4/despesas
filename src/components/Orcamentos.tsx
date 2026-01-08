@@ -20,6 +20,7 @@ const Orcamentos: React.FC = () => {
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingOrcamento, setEditingOrcamento] = useState<Orcamento | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -204,6 +205,13 @@ const Orcamentos: React.FC = () => {
     return matchesSearch;
   });
 
+  // Pagination logic
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(filteredOrcamentos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrcamentos = filteredOrcamentos.slice(startIndex, endIndex);
+
   // Only admin can create orcamentos
   const canCreateOrcamento = isAdmin;
 
@@ -244,7 +252,10 @@ const Orcamentos: React.FC = () => {
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               placeholder="Pesquisar orçamentos..."
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
@@ -259,7 +270,7 @@ const Orcamentos: React.FC = () => {
             Nenhum orçamento encontrado
           </div>
         ) : (
-          filteredOrcamentos.map((orcamento) => {
+          currentOrcamentos.map((orcamento) => {
             const totalRubricas = orcamento.rubricas?.length || 0;
             
             return (
@@ -342,6 +353,50 @@ const Orcamentos: React.FC = () => {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Mostrando <span className="font-medium">{startIndex + 1}</span> a{' '}
+              <span className="font-medium">{Math.min(endIndex, filteredOrcamentos.length)}</span> de{' '}
+              <span className="font-medium">{filteredOrcamentos.length}</span> resultados
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                      currentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

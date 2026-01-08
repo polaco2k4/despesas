@@ -20,13 +20,25 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('30');
 
+  // Helper function to get dashboard filters based on user role
+  const getDashboardFilters = () => {
+    const filters: any = {};
+    if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+      filters.userRole = userProfile.role;
+      filters.departamentoId = userProfile.departamento_id;
+    }
+    return filters;
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const filters = getDashboardFilters();
+        
         const [statsData, despesasData, dailyData] = await Promise.all([
-          dashboardAPI.getStats(),
-          despesasAPI.getAll({}),
-          dashboardAPI.getDailyExpenses({ period: selectedPeriod })
+          dashboardAPI.getStats(filters),
+          despesasAPI.getAll(filters),
+          dashboardAPI.getDailyExpenses({ ...filters, period: selectedPeriod })
         ]);
         
         console.log('Dashboard data received:', { statsData, dailyData });
@@ -292,7 +304,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Recent Expenses */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+      {(userProfile?.role === 'admin' || userProfile?.role === 'adm_area') && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="p-6 border-b border-gray-100">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
@@ -392,7 +405,8 @@ const Dashboard: React.FC = () => {
             </div>
           )}
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

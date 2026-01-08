@@ -4,7 +4,7 @@ import type { Despesa, DespesaStatus } from '../types/database.js';
 
 export const getAllDespesas = async (req: Request, res: Response) => {
   try {
-    const { status, usuario_id } = req.query;
+    const { status, usuario_id, departamento_id } = req.query;
     
     let whereClause = '';
     const params: Record<string, any> = {};
@@ -17,6 +17,11 @@ export const getAllDespesas = async (req: Request, res: Response) => {
     if (usuario_id) {
       whereClause += ' AND d.usuario_id = @usuario_id';
       params.usuario_id = usuario_id;
+    }
+    
+    if (departamento_id) {
+      whereClause += ' AND dept.id = @departamento_id';
+      params.departamento_id = departamento_id;
     }
     
     const query = `

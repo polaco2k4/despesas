@@ -97,17 +97,36 @@ const Relatorios: React.FC = () => {
     fetchData();
   }, []);
 
+  // Helper function to get filters based on user role
+  const getRelatoriosFilters = () => {
+    const filters: any = {};
+    if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+      filters.departamento_id = userProfile.departamento_id;
+    }
+    return filters;
+  };
+
   const fetchData = async () => {
     try {
+      const filters = getRelatoriosFilters();
+      
       const [despesasData, orcamentosData, departamentosData, rubricasData] = await Promise.all([
-        despesasAPI.getAll({}),
+        despesasAPI.getAll(filters),
         orcamentosAPI.getAll(),
         departamentosAPI.getAll(),
         rubricasAPI.getAll()
       ]);
       
+      // Filter orcamentos based on user role
+      const filteredOrcamentosData = orcamentosData.filter(orcamento => {
+        if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+          return orcamento.departamento_id === userProfile.departamento_id;
+        }
+        return true;
+      });
+      
       setDespesas(despesasData);
-      setOrcamentos(orcamentosData);
+      setOrcamentos(filteredOrcamentosData);
       setDepartamentos(departamentosData);
       setRubricas(rubricasData);
     } catch (error) {
@@ -386,7 +405,15 @@ const Relatorios: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Todos os departamentos</option>
-              {departamentos.map((dept) => (
+              {departamentos
+                .filter(dept => {
+                  // For gestor and colaborador, only show their own department
+                  if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+                    return dept.id === userProfile.departamento_id;
+                  }
+                  return true;
+                })
+                .map((dept) => (
                 <option key={dept.id} value={dept.id}>
                   {dept.nome}
                 </option>

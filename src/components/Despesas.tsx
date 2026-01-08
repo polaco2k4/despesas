@@ -35,6 +35,7 @@ const Despesas: React.FC = () => {
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -104,10 +105,21 @@ const Despesas: React.FC = () => {
     }
   };
 
+  // Helper function to get filters based on user role
+  const getDespesasFilters = () => {
+    const filters: any = {};
+    if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+      filters.departamento_id = userProfile.departamento_id;
+    }
+    return filters;
+  };
+
   const fetchData = async () => {
     try {
+      const filters = getDespesasFilters();
+      
       const [despesasData, rubricasData] = await Promise.all([
-        despesasAPI.getAll({}),
+        despesasAPI.getAll(filters),
         rubricasAPI.getAll()
       ]);
       
@@ -138,7 +150,7 @@ const Despesas: React.FC = () => {
       if (!rubrica || !rubrica.orcamento) return;
 
       // Calculate total expenses for this rubrica
-      const allDespesas = await despesasAPI.getAll({});
+      const allDespesas = await despesasAPI.getAll(getDespesasFilters());
       const despesasRubrica = allDespesas.filter(d => d.rubrica_id === rubricaId);
       const totalGasto = despesasRubrica.reduce((sum, d) => sum + d.valor, 0);
       const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
@@ -174,7 +186,7 @@ const Despesas: React.FC = () => {
       }
       
       // Get all expenses for this rubric
-      const todasDespesas = await despesasAPI.getAll({});
+      const todasDespesas = await despesasAPI.getAll(getDespesasFilters());
       const despesasDestaRubrica = todasDespesas.filter(d => d.rubrica_id === newDespesa.rubrica_id);
       
       // Calculate total spent on this rubric
@@ -321,7 +333,7 @@ const Despesas: React.FC = () => {
       }
       
       // Get all expenses for this rubric except the current one being updated
-      const todasDespesas = await despesasAPI.getAll({});
+      const todasDespesas = await despesasAPI.getAll(getDespesasFilters());
       const outrasDespesasDestaRubrica = todasDespesas.filter(
         d => d.rubrica_id === editingDespesa.rubrica_id && d.id !== selectedDespesa.id
       );
@@ -464,6 +476,13 @@ const Despesas: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
+  // Pagination logic
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(filteredDespesas.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentDespesas = filteredDespesas.slice(startIndex, endIndex);
+
   const availableRubricas = rubricas.filter(rubrica => {
     if (userProfile?.role === 'admin') return true;
     return rubrica.orcamento?.departamento_id === userProfile?.departamento_id;
@@ -503,7 +522,10 @@ const Despesas: React.FC = () => {
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
                 placeholder="Pesquisar despesas..."
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -514,7 +536,10 @@ const Despesas: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Todos os status</option>
@@ -556,20 +581,17 @@ const Despesas: React.FC = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Data
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Ações
-                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredDespesas.length === 0 ? (
+              {currentDespesas.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     Nenhuma despesa encontrada
                   </td>
                 </tr>
               ) : (
-                filteredDespesas.map((despesa) => (
+                currentDespesas.map((despesa) => (
                   <tr key={despesa.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
                       {despesa.id}
@@ -628,6 +650,50 @@ const Despesas: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="bg-white rounded-lg shadow p-4">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Mostrando <span className="font-medium">{startIndex + 1}</span> a{' '}
+              <span className="font-medium">{Math.min(endIndex, filteredDespesas.length)}</span> de{' '}
+              <span className="font-medium">{filteredDespesas.length}</span> resultados
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded-md text-sm font-medium ${
+                      currentPage === page
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Próximo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreateModal && (

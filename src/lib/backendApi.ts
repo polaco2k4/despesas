@@ -158,10 +158,11 @@ export const rubricasAPI = {
 };
 
 export const despesasAPI = {
-  getAll: (filters?: { status?: string; usuario_id?: string }) => {
+  getAll: (filters?: { status?: string; usuario_id?: string; departamento_id?: string }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.usuario_id) params.append('usuario_id', filters.usuario_id);
+    if (filters?.departamento_id) params.append('departamento_id', filters.departamento_id);
     const query = params.toString() ? `?${params.toString()}` : '';
     return fetchAPI<any[]>(`/despesas${query}`);
   },
