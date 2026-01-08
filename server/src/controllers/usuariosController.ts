@@ -16,21 +16,49 @@ export const getAllUsuarios = async (req: Request, res: Response) => {
     `;
     const results = await executeQuery(query);
     
-    const usuarios = results.map((row: any) => ({
-      id: row.id,
-      nome: row.nome,
-      email: row.email,
-      role: row.role,
-      departamento_id: row.departamento_id,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      departamento: row['departamento.id'] ? {
-        id: row['departamento.id'],
-        nome: row['departamento.nome'],
-        sigla: row['departamento.sigla'],
-        created_at: row['departamento.created_at'],
-        updated_at: row['departamento.updated_at']
-      } : undefined
+    const usuarios = await Promise.all(results.map(async (row: any) => {
+      const usuario: any = {
+        id: row.id,
+        nome: row.nome,
+        email: row.email,
+        role: row.role,
+        departamento_id: row.departamento_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at
+      };
+
+      // For adm_area users, get all their departments
+      if (row.role === 'adm_area') {
+        const deptQuery = `
+          SELECT 
+            d.id, d.nome, d.sigla, d.created_at, d.updated_at
+          FROM usuarios_departamentos ud
+          INNER JOIN departamentos d ON ud.departamento_id = d.id
+          WHERE ud.usuario_id = @usuario_id
+          ORDER BY d.nome
+        `;
+        const deptResults = await executeQuery(deptQuery, { usuario_id: row.id });
+        usuario.departamentos = deptResults.map((deptRow: any) => ({
+          id: deptRow.id,
+          nome: deptRow.nome,
+          sigla: deptRow.sigla,
+          created_at: deptRow.created_at,
+          updated_at: deptRow.updated_at
+        }));
+        usuario.departamento = usuario.departamentos.length > 0 ? usuario.departamentos[0] : undefined;
+      } else {
+        // For other roles, use their single department
+        usuario.departamento = row['departamento.id'] ? {
+          id: row['departamento.id'],
+          nome: row['departamento.nome'],
+          sigla: row['departamento.sigla'],
+          created_at: row['departamento.created_at'],
+          updated_at: row['departamento.updated_at']
+        } : undefined;
+        usuario.departamentos = usuario.departamento ? [usuario.departamento] : [];
+      }
+
+      return usuario;
     }));
     
     res.json(usuarios);

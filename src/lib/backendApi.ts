@@ -158,12 +158,16 @@ export const rubricasAPI = {
 };
 
 export const despesasAPI = {
-  getAll: (filters?: { status?: string; usuario_id?: string; departamento_id?: string }) => {
+  getAll: (filters?: { status?: string; usuario_id?: string; departamento_id?: string; departamento_ids?: string[] }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.usuario_id) params.append('usuario_id', filters.usuario_id);
     if (filters?.departamento_id) params.append('departamento_id', filters.departamento_id);
+    if (filters?.departamento_ids) {
+      filters.departamento_ids.forEach(id => params.append('departamento_ids', id));
+    }
     const query = params.toString() ? `?${params.toString()}` : '';
+    console.log('🔍 API Debug - Final URL:', `/despesas${query}`);
     return fetchAPI<any[]>(`/despesas${query}`);
   },
   
@@ -237,4 +241,26 @@ export const dashboardAPI = {
     const query = params.toString() ? `?${params.toString()}` : '';
     return fetchAPI<any[]>(`/dashboard/daily-expenses${query}`);
   },
+};
+
+export const usuariosDepartamentosAPI = {
+  getUserDepartamentos: (usuarioId: string) =>
+    fetchAPI<any[]>(`/usuarios/${usuarioId}/departamentos`),
+  
+  addUserDepartamento: (usuarioId: string, departamentoId: string) =>
+    fetchAPI<any[]>(`/usuarios/${usuarioId}/departamentos`, {
+      method: 'POST',
+      body: JSON.stringify({ departamento_id: departamentoId }),
+    }),
+  
+  removeUserDepartamento: (usuarioId: string, departamentoId: string) =>
+    fetchAPI<void>(`/usuarios/${usuarioId}/departamentos/${departamentoId}`, {
+      method: 'DELETE',
+    }),
+  
+  updateUserDepartamentos: (usuarioId: string, departamentoIds: string[]) =>
+    fetchAPI<any[]>(`/usuarios/${usuarioId}/departamentos`, {
+      method: 'PUT',
+      body: JSON.stringify({ departamento_ids: departamentoIds }),
+    }),
 };

@@ -3,8 +3,17 @@ import { executeQuery } from '../config/database.js';
 import type { Despesa, DespesaStatus } from '../types/database.js';
 
 export const getAllDespesas = async (req: Request, res: Response) => {
+  console.log('🚀 getAllDespesas called!');
   try {
-    const { status, usuario_id, departamento_id } = req.query;
+    const { status, usuario_id, departamento_id, departamento_ids } = req.query;
+    
+    console.log('🔍 Backend Debug - Query params received:', {
+      status,
+      usuario_id,
+      departamento_id,
+      departamento_ids,
+      tipo_departamento_ids: Array.isArray(departamento_ids) ? 'array' : typeof departamento_ids
+    });
     
     let whereClause = '';
     const params: Record<string, any> = {};
@@ -20,9 +29,24 @@ export const getAllDespesas = async (req: Request, res: Response) => {
     }
     
     if (departamento_id) {
-      whereClause += ' AND dept.id = @departamento_id';
+      whereClause += ' AND o.departamento_id = @departamento_id';
       params.departamento_id = departamento_id;
     }
+    
+    // Support multiple departamento_ids for adm_area users
+    if (departamento_ids) {
+      const deptIds = Array.isArray(departamento_ids) ? departamento_ids : [departamento_ids];
+      console.log('🔍 Backend Debug - Processing departamento_ids:', deptIds);
+      whereClause += ` AND o.departamento_id IN (${deptIds.map((_, i) => `@dept_id${i}`).join(', ')})`;
+      deptIds.forEach((id, i) => {
+        params[`dept_id${i}`] = id;
+      });
+      console.log('🔍 Backend Debug - Where clause for dept_ids:', whereClause);
+      console.log('🔍 Backend Debug - Params for dept_ids:', params);
+    }
+    
+    console.log('🔍 Backend Debug - Final where clause:', whereClause);
+    console.log('🔍 Backend Debug - Final params:', params);
     
     const query = `
       SELECT 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { usuariosAPI, departamentosAPI } from '../lib/backendApi';
+import { usuariosAPI, departamentosAPI, usuariosDepartamentosAPI } from '../lib/backendApi';
 import type { Usuario, UserRole } from '../types/database';
 import { 
   Plus, 
@@ -13,6 +13,7 @@ type FormData = Omit<Usuario, 'id' | 'created_at' | 'updated_at' | 'departamento
   id?: string;
   password?: string;
   confirmPassword?: string;
+  departamento_ids?: string[];
 };
 
 const initialFormData: FormData = {
@@ -21,7 +22,8 @@ const initialFormData: FormData = {
   role: 'colaborador',
   departamento_id: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  departamento_ids: []
 };
 
 const Usuarios: React.FC = () => {
@@ -62,7 +64,8 @@ const Usuarios: React.FC = () => {
       role: usuario.role,
       departamento_id: usuario.departamento_id || '',
       password: '',
-      confirmPassword: ''
+      confirmPassword: '',
+      departamento_ids: usuario.departamentos?.map(d => d.id) || []
     });
     setShowCreateModal(true);
   };
@@ -74,9 +77,23 @@ const Usuarios: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    if (!formData.nome || !formData.email || !formData.role || !formData.departamento_id) {
+    if (!formData.nome || !formData.email || !formData.role) {
       alert('Preencha todos os campos obrigatórios');
       return false;
+    }
+
+    // For adm_area users, require at least one department
+    if (formData.role === 'adm_area') {
+      if (!formData.departamento_ids || formData.departamento_ids.length === 0) {
+        alert('ADM Área deve ter pelo menos um departamento atribuído');
+        return false;
+      }
+    } else {
+      // For other roles, require single department
+      if (!formData.departamento_id) {
+        alert('Selecione um departamento');
+        return false;
+      }
     }
 
     if (!editingUsuario && (!formData.password || formData.password.length < 6)) {
@@ -103,16 +120,26 @@ const Usuarios: React.FC = () => {
           nome: formData.nome,
           email: formData.email,
           role: formData.role,
-          departamento_id: formData.departamento_id
+          departamento_id: formData.role === 'adm_area' ? null : formData.departamento_id
         });
+
+        // If adm_area, update departments
+        if (formData.role === 'adm_area' && formData.departamento_ids) {
+          await usuariosDepartamentosAPI.updateUserDepartamentos(editingUsuario.id, formData.departamento_ids);
+        }
       } else {
-        await usuariosAPI.create({
+        const newUser = await usuariosAPI.create({
           nome: formData.nome,
           email: formData.email,
           role: formData.role,
-          departamento_id: formData.departamento_id,
+          departamento_id: formData.role === 'adm_area' ? null : formData.departamento_id,
           password_hash: formData.password
         });
+
+        // If adm_area, set departments after user creation
+        if (formData.role === 'adm_area' && formData.departamento_ids && formData.departamento_ids.length > 0) {
+          await usuariosDepartamentosAPI.updateUserDepartamentos(newUser.id, formData.departamento_ids);
+        }
       }
       
       handleCloseModal();
@@ -226,7 +253,9 @@ const Usuarios: React.FC = () => {
                       {usuario.email}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {usuario.departamento?.nome || '-'}
+                      {usuario.role === 'adm_area' && usuario.departamentos && usuario.departamentos.length > 0
+                        ? usuario.departamentos.map(d => d.nome).join(', ')
+                        : usuario.departamento?.nome || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -360,23 +389,44 @@ const Usuarios: React.FC = () => {
                 </select>
               </div>
               <div className="mb-4">
-                <label htmlFor="departamento_id" className="block text-sm font-medium text-gray-700 mb-1">
-                  Departamento *
+                <label htmlFor="departamento" className="block text-sm font-medium text-gray-700 mb-1">
+                  {formData.role === 'adm_area' ? 'Departamentos *' : 'Departamento *'}
                 </label>
-                <select
-                  id="departamento_id"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  value={formData.departamento_id}
-                  onChange={(e) => setFormData({ ...formData, departamento_id: e.target.value })}
-                  required
-                >
-                  <option value="">Selecione um departamento</option>
-                  {departamentos.map((dept) => (
-                    <option key={dept.id} value={dept.id}>
-                      {dept.nome}
-                    </option>
-                  ))}
-                </select>
+                {formData.role === 'adm_area' ? (
+                  <div className="space-y-2 max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2">
+                    {departamentos.map((dept) => (
+                      <label key={dept.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          className="mr-2"
+                          checked={formData.departamento_ids?.includes(dept.id) || false}
+                          onChange={(e) => {
+                            const updatedIds = e.target.checked
+                              ? [...(formData.departamento_ids || []), dept.id]
+                              : (formData.departamento_ids || []).filter(id => id !== dept.id);
+                            setFormData({ ...formData, departamento_ids: updatedIds });
+                          }}
+                        />
+                        <span className="text-sm">{dept.nome}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <select
+                    id="departamento_id"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={formData.departamento_id || ''}
+                    onChange={(e) => setFormData({ ...formData, departamento_id: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecione um departamento</option>
+                    {departamentos.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.nome}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div className="flex justify-end gap-2">
                 <button

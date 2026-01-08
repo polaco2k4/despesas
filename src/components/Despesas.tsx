@@ -108,9 +108,33 @@ const Despesas: React.FC = () => {
   // Helper function to get filters based on user role
   const getDespesasFilters = () => {
     const filters: any = {};
-    if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+    console.log('🔍 Frontend Debug - UserProfile:', {
+      role: userProfile?.role,
+      departamentos: userProfile?.departamentos?.map(d => ({ id: d.id, nome: d.nome })),
+      departamento_id: userProfile?.departamento_id
+    });
+    
+    if (userProfile?.role === 'adm_area') {
+      // For adm_area users, check if they have multiple departments assigned
+      if (userProfile.departamentos && userProfile.departamentos.length > 0) {
+        // Filter by all their departments
+        filters.departamento_ids = userProfile.departamentos.map(d => d.id);
+        console.log('🔍 Frontend Debug - Setting departamento_ids:', filters.departamento_ids);
+      } else if (userProfile.departamento_id) {
+        // Fallback to single department if no multiple departments assigned
+        filters.departamento_id = userProfile.departamento_id;
+        console.log('🔍 Frontend Debug - Setting departamento_id (fallback):', filters.departamento_id);
+      } else {
+        console.log('🔍 Frontend Debug - No departments found for adm_area user!');
+      }
+      // If no departments at all, don't filter (will show all - this is the current issue)
+    } else if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+      // For gestor and colaborador, filter by their single department
       filters.departamento_id = userProfile.departamento_id;
+      console.log('🔍 Frontend Debug - Setting departamento_id for gestor/colaborador:', filters.departamento_id);
     }
+    
+    console.log('🔍 Frontend Debug - Final filters:', filters);
     return filters;
   };
 
@@ -448,10 +472,24 @@ const Despesas: React.FC = () => {
       });
       break;
     case 'pendente_adm_area':
-      resultado = userProfile.role === 'adm_area' && userProfile.departamento_id === despesa.rubrica?.orcamento?.departamento_id;
+      if (userProfile.role === 'adm_area') {
+        // Check if user has multiple departments assigned
+        if (userProfile.departamentos && userProfile.departamentos.length > 0) {
+          resultado = userProfile.departamentos.some(dept => dept.id === despesa.rubrica?.orcamento?.departamento_id);
+        } else if (userProfile.departamento_id) {
+          // Fallback to single department
+          resultado = userProfile.departamento_id === despesa.rubrica?.orcamento?.departamento_id;
+        } else {
+          // If no departments assigned, cannot approve (security measure)
+          resultado = false;
+        }
+      } else {
+        resultado = false;
+      }
       console.log('📋 Verificando pendente_adm_area:', {
         userRole: userProfile.role,
-        userDepto: userProfile.departamento_id,
+        userDepartamentos: userProfile.departamentos?.map(d => ({ id: d.id, nome: d.nome })),
+        userDepartamentoId: userProfile.departamento_id,
         despesaDepto: despesa.rubrica?.orcamento?.departamento_id,
         resultado
       });
@@ -485,6 +523,17 @@ const Despesas: React.FC = () => {
 
   const availableRubricas = rubricas.filter(rubrica => {
     if (userProfile?.role === 'admin') return true;
+    if (userProfile?.role === 'adm_area') {
+      // Check if user has multiple departments assigned
+      if (userProfile.departamentos && userProfile.departamentos.length > 0) {
+        return userProfile.departamentos.some(dept => dept.id === rubrica.orcamento?.departamento_id);
+      } else if (userProfile.departamento_id) {
+        // Fallback to single department
+        return rubrica.orcamento?.departamento_id === userProfile.departamento_id;
+      }
+      // If no departments assigned, don't show any rubricas (security measure)
+      return false;
+    }
     return rubrica.orcamento?.departamento_id === userProfile?.departamento_id;
   });
 

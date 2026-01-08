@@ -100,7 +100,11 @@ const Relatorios: React.FC = () => {
   // Helper function to get filters based on user role
   const getRelatoriosFilters = () => {
     const filters: any = {};
-    if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+    if (userProfile?.role === 'adm_area' && userProfile?.departamentos && userProfile.departamentos.length > 0) {
+      // For adm_area users, filter by all their departments
+      filters.departamento_ids = userProfile.departamentos.map(d => d.id);
+    } else if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+      // For gestor and colaborador, filter by their single department
       filters.departamento_id = userProfile.departamento_id;
     }
     return filters;
@@ -118,8 +122,10 @@ const Relatorios: React.FC = () => {
       ]);
       
       // Filter orcamentos based on user role
-      const filteredOrcamentosData = orcamentosData.filter(orcamento => {
-        if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+      const filteredOrcamentosData = orcamentosData.filter((orcamento: Orcamento) => {
+        if (userProfile?.role === 'adm_area' && userProfile?.departamentos && userProfile.departamentos.length > 0) {
+          return userProfile.departamentos.some(dept => dept.id === orcamento.departamento_id);
+        } else if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
           return orcamento.departamento_id === userProfile.departamento_id;
         }
         return true;

@@ -8,6 +8,7 @@ import { getConnection, closeConnection } from './config/database.js';
 import authRoutes from './routes/auth.js';
 import departamentosRoutes from './routes/departamentos.js';
 import usuariosRoutes from './routes/usuarios.js';
+import usuariosDepartamentosRoutes from './routes/usuariosDepartamentosRoutes.js';
 import orcamentosRoutes from './routes/orcamentos.js';
 import rubricasRoutes from './routes/rubricas.js';
 import despesasRoutes from './routes/despesas.js';
@@ -39,6 +40,7 @@ app.use(cors({
 app.use('/api/auth', authRoutes);
 app.use('/api/departamentos', departamentosRoutes);
 app.use('/api/usuarios', usuariosRoutes);
+app.use('/api', usuariosDepartamentosRoutes);
 app.use('/api/orcamentos', orcamentosRoutes);
 app.use('/api/rubricas', rubricasRoutes);
 app.use('/api/despesas', despesasRoutes);

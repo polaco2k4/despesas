@@ -20,6 +20,7 @@ export interface Usuario {
   created_at: string;
   updated_at: string;
   departamento?: Departamento;
+  departamentos?: Departamento[];
 }
 
 export interface Orcamento {
