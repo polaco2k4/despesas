@@ -107,14 +107,21 @@ const Despesas: React.FC = () => {
 
   // Helper function to get filters based on user role
   const getDespesasFilters = () => {
-    const filters: any = {};
+    const filters: any = {
+      user_role: userProfile?.role,
+      user_departamento_id: userProfile?.departamento_id
+    };
+    
     console.log('🔍 Frontend Debug - UserProfile:', {
       role: userProfile?.role,
       departamentos: userProfile?.departamentos?.map(d => ({ id: d.id, nome: d.nome })),
       departamento_id: userProfile?.departamento_id
     });
     
-    if (userProfile?.role === 'adm_area') {
+    if (userProfile?.role === 'admin') {
+      // Admin users can see all despesas - no filters applied
+      console.log('🔍 Frontend Debug - Admin user - no filters applied');
+    } else if (userProfile?.role === 'adm_area') {
       // For adm_area users, check if they have multiple departments assigned
       if (userProfile.departamentos && userProfile.departamentos.length > 0) {
         // Filter by all their departments
@@ -126,12 +133,19 @@ const Despesas: React.FC = () => {
         console.log('🔍 Frontend Debug - Setting departamento_id (fallback):', filters.departamento_id);
       } else {
         console.log('🔍 Frontend Debug - No departments found for adm_area user!');
+        // If no departments assigned, don't show any despesas for security
+        filters.departamento_ids = [];
       }
-      // If no departments at all, don't filter (will show all - this is the current issue)
-    } else if ((userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') && userProfile?.departamento_id) {
+    } else if (userProfile?.role === 'gestor' || userProfile?.role === 'colaborador') {
       // For gestor and colaborador, filter by their single department
-      filters.departamento_id = userProfile.departamento_id;
-      console.log('🔍 Frontend Debug - Setting departamento_id for gestor/colaborador:', filters.departamento_id);
+      if (userProfile?.departamento_id) {
+        filters.departamento_id = userProfile.departamento_id;
+        console.log('🔍 Frontend Debug - Setting departamento_id for gestor/colaborador:', filters.departamento_id);
+      } else {
+        console.log('🔍 Frontend Debug - No departamento_id found for gestor/colaborador user!');
+        // If no department assigned, don't show any despesas for security
+        filters.departamento_ids = [];
+      }
     }
     
     console.log('🔍 Frontend Debug - Final filters:', filters);

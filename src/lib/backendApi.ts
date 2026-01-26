@@ -158,7 +158,14 @@ export const rubricasAPI = {
 };
 
 export const despesasAPI = {
-  getAll: (filters?: { status?: string; usuario_id?: string; departamento_id?: string; departamento_ids?: string[] }) => {
+  getAll: (filters?: { 
+    status?: string; 
+    usuario_id?: string; 
+    departamento_id?: string; 
+    departamento_ids?: string[];
+    user_role?: string;
+    user_departamento_id?: string;
+  }) => {
     const params = new URLSearchParams();
     if (filters?.status) params.append('status', filters.status);
     if (filters?.usuario_id) params.append('usuario_id', filters.usuario_id);
@@ -166,6 +173,8 @@ export const despesasAPI = {
     if (filters?.departamento_ids) {
       filters.departamento_ids.forEach(id => params.append('departamento_ids', id));
     }
+    if (filters?.user_role) params.append('user_role', filters.user_role);
+    if (filters?.user_departamento_id) params.append('user_departamento_id', filters.user_departamento_id);
     const query = params.toString() ? `?${params.toString()}` : '';
     console.log('🔍 API Debug - Final URL:', `/despesas${query}`);
     return fetchAPI<any[]>(`/despesas${query}`);
@@ -263,4 +272,46 @@ export const usuariosDepartamentosAPI = {
       method: 'PUT',
       body: JSON.stringify({ departamento_ids: departamentoIds }),
     }),
+};
+
+export const notificacoesAPI = {
+  getByUsuario: (usuarioId: string, naoLidasApenas?: boolean) => {
+    const params = new URLSearchParams();
+    if (naoLidasApenas) params.append('naoLidasApenas', 'true');
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return fetchAPI<any[]>(`/notificacoes/usuario/${usuarioId}${query}`);
+  },
+  
+  create: (data: {
+    usuario_id: string;
+    titulo: string;
+    mensagem: string;
+    tipo: 'info' | 'success' | 'warning' | 'error';
+    categoria: 'despesa' | 'aprovacao' | 'sistema';
+    acao_id?: string;
+  }) =>
+    fetchAPI<any>('/notificacoes', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  marcarComoLida: (id: string, usuarioId: string) =>
+    fetchAPI<void>(`/notificacoes/${id}/marcar-lida`, {
+      method: 'PATCH',
+      body: JSON.stringify({ usuarioId }),
+    }),
+  
+  marcarTodasComoLidas: (usuarioId: string) =>
+    fetchAPI<void>(`/notificacoes/usuario/${usuarioId}/marcar-todas-lidas`, {
+      method: 'PATCH',
+    }),
+  
+  delete: (id: string, usuarioId: string) =>
+    fetchAPI<void>(`/notificacoes/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ usuarioId }),
+    }),
+  
+  getContagemNaoLidas: (usuarioId: string) =>
+    fetchAPI<{ count: number }>(`/notificacoes/usuario/${usuarioId}/nao-lidas`),
 };

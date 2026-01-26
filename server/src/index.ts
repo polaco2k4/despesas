@@ -15,6 +15,7 @@ import despesasRoutes from './routes/despesas.js';
 import aprovacoesRoutes from './routes/aprovacoes.js';
 import dashboardRoutes from './routes/dashboard.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
+import notificacoesRoutes from './routes/notificacoes.js';
 
 dotenv.config();
 
@@ -47,6 +48,10 @@ app.use('/api/despesas', despesasRoutes);
 app.use('/api/aprovacoes', aprovacoesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
+app.use('/api/notificacoes', notificacoesRoutes);
+
+console.log('🔍 Debug - Routes loaded:');
+console.log('- notificacoesRoutes:', !!notificacoesRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend API está funcionando' });

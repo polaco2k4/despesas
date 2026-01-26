@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import Notifications from './Notifications';
 import { 
   LayoutDashboard, 
   FileText, 
@@ -201,15 +202,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="ml-auto">
               <div className="flex items-center space-x-3">
                 {/* Botão de notificações */}
-                <div className="relative">
-                  <button 
-                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-                    aria-label="Notificações"
-                  >
-                    <Bell className="text-gray-600" size={20} />
-                    <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
-                  </button>
-                </div>
+                <Notifications />
                 
                 {/* Separador */}
                 <div className="h-8 w-px bg-gray-200"></div>

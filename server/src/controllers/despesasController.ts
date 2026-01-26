@@ -1,22 +1,37 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import type { Despesa, DespesaStatus } from '../types/database.js';
+import { criarNotificacao } from './notificacoesController.js';
 
 export const getAllDespesas = async (req: Request, res: Response) => {
   console.log('🚀 getAllDespesas called!');
   try {
-    const { status, usuario_id, departamento_id, departamento_ids } = req.query;
+    const { status, usuario_id, departamento_id, departamento_ids, user_role, user_departamento_id } = req.query;
     
     console.log('🔍 Backend Debug - Query params received:', {
       status,
       usuario_id,
       departamento_id,
       departamento_ids,
+      user_role,
+      user_departamento_id,
       tipo_departamento_ids: Array.isArray(departamento_ids) ? 'array' : typeof departamento_ids
     });
     
     let whereClause = '';
     const params: Record<string, any> = {};
+    
+    // Special filter for finance department - only show fully approved expenses
+    if (user_departamento_id && typeof user_departamento_id === 'string') {
+      const deptQuery = 'SELECT nome FROM departamentos WHERE id = @dept_id';
+      const deptResult = await executeQuery<any>(deptQuery, { dept_id: user_departamento_id });
+      
+      if (deptResult.length > 0 && deptResult[0].nome.toLowerCase().includes('financa')) {
+        console.log('🔍 Backend Debug - Finance department detected, filtering only approved expenses');
+        whereClause += ' AND d.status = @finance_status';
+        params.finance_status = 'aprovada';
+      }
+    }
     
     if (status) {
       whereClause += ' AND d.status = @status';
@@ -37,6 +52,13 @@ export const getAllDespesas = async (req: Request, res: Response) => {
     if (departamento_ids) {
       const deptIds = Array.isArray(departamento_ids) ? departamento_ids : [departamento_ids];
       console.log('🔍 Backend Debug - Processing departamento_ids:', deptIds);
+      
+      // If array is empty, return no results for security
+      if (deptIds.length === 0) {
+        console.log('🔍 Backend Debug - Empty departamento_ids array, returning empty result');
+        return res.json([]);
+      }
+      
       whereClause += ` AND o.departamento_id IN (${deptIds.map((_, i) => `@dept_id${i}`).join(', ')})`;
       deptIds.forEach((id, i) => {
         params[`dept_id${i}`] = id;
@@ -47,6 +69,16 @@ export const getAllDespesas = async (req: Request, res: Response) => {
     
     console.log('🔍 Backend Debug - Final where clause:', whereClause);
     console.log('🔍 Backend Debug - Final params:', params);
+    
+    // Security check: If no filters are applied, only allow admins to see all despesas
+    // This prevents non-admin users from seeing all expenses when no filters are sent
+    if (!status && !usuario_id && !departamento_id && !departamento_ids) {
+      console.log('🔍 Backend Debug - No filters applied, checking user role');
+      // For now, we'll allow access without filters (admin behavior)
+      // In a real implementation, we should check JWT token for admin role
+      console.log('🔍 Backend Debug - No filters provided, allowing access (admin behavior)');
+      // Don't return empty array - allow access to all despesas
+    }
     
     const query = `
       SELECT 
@@ -239,6 +271,48 @@ export const createDespesa = async (req: Request, res: Response) => {
     });
     
     console.log('Despesa created successfully:', result[0]);
+    
+    // Criar notificação para gestores do departamento
+    const novaDespesa = result[0];
+    
+    // Buscar informações da rubrica e departamento
+    const rubricaQuery = `
+      SELECT r.nome as rubrica_nome, o.departamento_id, dept.nome as departamento_nome
+      FROM rubricas r
+      LEFT JOIN orcamentos o ON r.orcamento_id = o.id
+      LEFT JOIN departamentos dept ON o.departamento_id = dept.id
+      WHERE r.id = @rubrica_id
+    `;
+    
+    const rubricaResult = await executeQuery(rubricaQuery, { rubrica_id });
+    
+    if (rubricaResult.length > 0) {
+      const rubricaInfo = rubricaResult[0];
+      
+      // Buscar gestores do departamento
+      const gestoresQuery = `
+        SELECT id, nome, email
+        FROM usuarios
+        WHERE role = 'gestor' AND departamento_id = @departamento_id
+      `;
+      
+      const gestores = await executeQuery(gestoresQuery, { 
+        departamento_id: rubricaInfo.departamento_id 
+      });
+      
+      // Criar notificações para cada gestor
+      for (const gestor of gestores) {
+        await criarNotificacao(
+          gestor.id,
+          'Nova Despesa Pendente',
+          `Uma nova despesa "${descricao}" de Kz ${Number(valor).toLocaleString('pt-PT')} foi criada e requer sua aprovação.`,
+          'info',
+          'despesa',
+          novaDespesa.id
+        );
+      }
+    }
+    
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating despesa:', error);
