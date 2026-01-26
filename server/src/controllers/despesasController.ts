@@ -6,7 +6,19 @@ import { criarNotificacao } from './notificacoesController.js';
 export const getAllDespesas = async (req: Request, res: Response) => {
   console.log('🚀 getAllDespesas called!');
   try {
-    const { status, usuario_id, departamento_id, departamento_ids, user_role, user_departamento_id } = req.query;
+    const { 
+      status, 
+      usuario_id, 
+      departamento_id, 
+      departamento_ids, 
+      user_role, 
+      user_departamento_id,
+      data_inicio,
+      data_fim,
+      rubrica_id,
+      valor_min,
+      valor_max
+    } = req.query;
     
     console.log('🔍 Backend Debug - Query params received:', {
       status,
@@ -15,21 +27,27 @@ export const getAllDespesas = async (req: Request, res: Response) => {
       departamento_ids,
       user_role,
       user_departamento_id,
+      data_inicio,
+      data_fim,
+      rubrica_id,
+      valor_min,
+      valor_max,
       tipo_departamento_ids: Array.isArray(departamento_ids) ? 'array' : typeof departamento_ids
     });
     
     let whereClause = '';
     const params: Record<string, any> = {};
     
-    // Special filter for finance department - only show fully approved expenses
+    // Special filter for finance department - show approved and paid expenses
     if (user_departamento_id && typeof user_departamento_id === 'string') {
       const deptQuery = 'SELECT nome FROM departamentos WHERE id = @dept_id';
       const deptResult = await executeQuery<any>(deptQuery, { dept_id: user_departamento_id });
       
       if (deptResult.length > 0 && deptResult[0].nome.toLowerCase().includes('financa')) {
-        console.log('🔍 Backend Debug - Finance department detected, filtering only approved expenses');
-        whereClause += ' AND d.status = @finance_status';
-        params.finance_status = 'aprovada';
+        console.log('🔍 Backend Debug - Finance department detected, filtering approved and paid expenses');
+        whereClause += ' AND d.status IN (@finance_status1, @finance_status2)';
+        params.finance_status1 = 'aprovada';
+        params.finance_status2 = 'paga';
       }
     }
     
@@ -44,7 +62,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
     }
     
     if (departamento_id) {
-      whereClause += ' AND o.departamento_id = @departamento_id';
+      whereClause += ' AND dept.id = @departamento_id';
       params.departamento_id = departamento_id;
     }
     
@@ -59,12 +77,38 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         return res.json([]);
       }
       
-      whereClause += ` AND o.departamento_id IN (${deptIds.map((_, i) => `@dept_id${i}`).join(', ')})`;
+      whereClause += ` AND dept.id IN (${deptIds.map((_, i) => `@dept_id${i}`).join(', ')})`;
       deptIds.forEach((id, i) => {
         params[`dept_id${i}`] = id;
       });
       console.log('🔍 Backend Debug - Where clause for dept_ids:', whereClause);
       console.log('🔍 Backend Debug - Params for dept_ids:', params);
+    }
+    
+    // Filtros avançados
+    if (data_inicio) {
+      whereClause += ' AND d.created_at >= @data_inicio';
+      params.data_inicio = data_inicio;
+    }
+    
+    if (data_fim) {
+      whereClause += ' AND d.created_at <= @data_fim';
+      params.data_fim = data_fim;
+    }
+    
+    if (rubrica_id) {
+      whereClause += ' AND d.rubrica_id = @rubrica_id';
+      params.rubrica_id = rubrica_id;
+    }
+    
+    if (valor_min) {
+      whereClause += ' AND d.valor >= @valor_min';
+      params.valor_min = Number(valor_min);
+    }
+    
+    if (valor_max) {
+      whereClause += ' AND d.valor <= @valor_max';
+      params.valor_max = Number(valor_max);
     }
     
     console.log('🔍 Backend Debug - Final where clause:', whereClause);

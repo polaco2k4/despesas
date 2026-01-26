@@ -184,20 +184,20 @@ const Despesas: React.FC = () => {
 
     try {
       // Find the selected rubrica
-      const rubrica = rubricas.find(r => r.id === rubricaId);
-      if (!rubrica || !rubrica.orcamento) return;
+      const rubrica = availableRubricas.find(r => r.id === rubricaId);
+      if (!rubrica) return;
 
       // Calculate total expenses for this rubrica
       const allDespesas = await despesasAPI.getAll(getDespesasFilters());
       const despesasRubrica = allDespesas.filter(d => d.rubrica_id === rubricaId);
       const totalGasto = despesasRubrica.reduce((sum, d) => sum + d.valor, 0);
-      const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
+      const rubricaDisponivel = rubrica.valor - totalGasto;
 
       setNewDespesa(prev => ({
         ...prev,
         rubrica_id: rubricaId,
-        valor_orcamento: rubrica.orcamento!.valor_total.toString(),
-        orcamento_disponivel: orcamentoDisponivel.toString(),
+        valor_orcamento: rubrica.valor.toString(),
+        orcamento_disponivel: rubricaDisponivel.toString(),
         orcamento_realizado: totalGasto.toString()
       }));
     } catch (error) {
@@ -211,13 +211,13 @@ const Despesas: React.FC = () => {
     try {
       const valorDespesa = parseFloat(newDespesa.valor);
       
-      // Get the selected rubric and its total budget
+      // Get the selected rubric
       const rubrica = availableRubricas.find(r => r.id === newDespesa.rubrica_id);
-      if (!rubrica || !rubrica.orcamento) {
+      if (!rubrica) {
         setAlertDialog({
           isOpen: true,
           title: 'Erro',
-          message: 'Rubrica não encontrada ou sem orçamento associado',
+          message: 'Rubrica não encontrada',
           type: 'error'
         });
         return;
@@ -229,14 +229,14 @@ const Despesas: React.FC = () => {
       
       // Calculate total spent on this rubric
       const totalGasto = despesasDestaRubrica.reduce((sum, d) => sum + d.valor, 0);
-      const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
+      const rubricaDisponivel = rubrica.valor - totalGasto;
       
       // Check if the new expense would exceed the budget
-      if (valorDespesa > orcamentoDisponivel) {
+      if (valorDespesa > rubricaDisponivel) {
         setAlertDialog({
           isOpen: true,
-          title: 'Orçamento Excedido',
-          message: `O valor da despesa (Kz ${valorDespesa.toLocaleString('pt-PT')}) excede o orçamento disponível para esta rubrica (Kz ${orcamentoDisponivel.toLocaleString('pt-PT')}).`,
+          title: 'Rubrica Excedida',
+          message: `O valor da despesa (Kz ${valorDespesa.toLocaleString('pt-PT')}) excede o valor disponível para esta rubrica (Kz ${rubricaDisponivel.toLocaleString('pt-PT')}).`,
           type: 'error'
         });
         return;
@@ -358,13 +358,13 @@ const Despesas: React.FC = () => {
     try {
       const valorDespesa = typeof editingDespesa.valor === 'string' ? parseFloat(editingDespesa.valor) : editingDespesa.valor;
       
-      // Get the selected rubric and its total budget
+      // Get the selected rubric
       const rubrica = availableRubricas.find(r => r.id === editingDespesa.rubrica_id);
-      if (!rubrica || !rubrica.orcamento) {
+      if (!rubrica) {
         setAlertDialog({
           isOpen: true,
           title: 'Erro',
-          message: 'Rubrica não encontrada ou sem orçamento associado',
+          message: 'Rubrica não encontrada',
           type: 'error'
         });
         return;
@@ -378,14 +378,14 @@ const Despesas: React.FC = () => {
       
       // Calculate total spent on this rubric (excluding the current expense being updated)
       const totalGasto = outrasDespesasDestaRubrica.reduce((sum, d) => sum + d.valor, 0);
-      const orcamentoDisponivel = rubrica.orcamento.valor_total - totalGasto;
+      const rubricaDisponivel = rubrica.valor - totalGasto;
       
       // Check if the updated expense would exceed the budget
-      if (valorDespesa > orcamentoDisponivel) {
+      if (valorDespesa > rubricaDisponivel) {
         setAlertDialog({
           isOpen: true,
-          title: 'Orçamento Excedido',
-          message: `O valor atualizado da despesa (Kz ${valorDespesa.toLocaleString('pt-PT')}) excede o orçamento disponível para esta rubrica (Kz ${orcamentoDisponivel.toLocaleString('pt-PT')}).`,
+          title: 'Rubrica Excedida',
+          message: `O valor atualizado da despesa (Kz ${valorDespesa.toLocaleString('pt-PT')}) excede o valor disponível para esta rubrica (Kz ${rubricaDisponivel.toLocaleString('pt-PT')}).`,
           type: 'error'
         });
         return;
@@ -836,7 +836,7 @@ const Despesas: React.FC = () => {
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Valor do Orçamento (Kz)
+                    Valor da Rubrica (Kz)
                   </label>
                   <input
                     type="number"
@@ -852,7 +852,7 @@ const Despesas: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Orçamento Disponível (Kz)
+                    Rubrica Disponível (Kz)
                   </label>
                   <input
                     type="number"
@@ -868,7 +868,7 @@ const Despesas: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Orçamento Realizado (Kz)
+                    Rubrica Realizada (Kz)
                   </label>
                   <input
                     type="number"

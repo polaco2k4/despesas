@@ -110,74 +110,51 @@ const FinancasContent: React.FC = () => {
   }, []);
 
   const fetchDespesasAprovadas = async (filtrosAtuais: Filtros = filtros) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // Buscar despesas com status pendente, aprovada, paga e negada
-      const [pendentes, aprovadas, pagas, negadas] = await Promise.all([
-        despesasAPI.getAll({ ...filtrosAtuais, status: 'pendente_gestor' }),
-        despesasAPI.getAll({ ...filtrosAtuais, status: 'aprovada' }),
-        despesasAPI.getAll({ ...filtrosAtuais, status: 'paga' }),
-        despesasAPI.getAll({ ...filtrosAtuais, status: 'negada' })
-      ]);
+      console.log('🔍 Frontend Debug - Buscando despesas com filtros:', filtrosAtuais);
+      
+      // Para o departamento financeiro, buscar todos os status relevantes
+      const statuses = ['pendente_gestor', 'aprovada', 'paga', 'negada'];
+      
+      // Buscar todas as despesas dos status relevantes com filtros aplicados
+      const promises = statuses.map(status => {
+        const params = {
+          status,
+          data_inicio: filtrosAtuais.dataInicio || undefined,
+          data_fim: filtrosAtuais.dataFim || undefined,
+          rubrica_id: filtrosAtuais.rubricaId || undefined,
+          departamento_id: filtrosAtuais.departamentoId || undefined,
+          valor_min: filtrosAtuais.valorMin ? Number(filtrosAtuais.valorMin) : undefined,
+          valor_max: filtrosAtuais.valorMax ? Number(filtrosAtuais.valorMax) : undefined,
+          user_departamento_id: userProfile?.departamento_id
+        };
+        console.log(`🔍 Frontend Debug - Buscando despesas com status ${status}:`, params);
+        return despesasAPI.getAll(params);
+      });
+      
+      const results = await Promise.all(promises);
+      console.log('🔍 Frontend Debug - Resultados recebidos:', results.map(r => r.length));
       
       // Combinar todas as despesas
-      const data = [...pendentes, ...aprovadas, ...pagas, ...negadas];
+      const data = results.flat();
+      console.log('🔍 Frontend Debug - Total de despesas após filtros:', data.length);
       
       // Ordenar por data mais recente (created_at em ordem decrescente)
       data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       
-      // Aplicar filtros adicionais
-      let filteredData = [...data];
+      setDespesas(data);
+      setCurrentPage(1); // Resetar para primeira página quando os dados mudam
+      calcularEstatisticas(data); // Atualizar estatísticas após filtrar
       
-      if (filtrosAtuais.dataInicio) {
-        filteredData = filteredData.filter(d => 
-          new Date(d.created_at) >= new Date(filtrosAtuais.dataInicio)
-        );
-      }
-      
-      if (filtrosAtuais.dataFim) {
-        const endDate = new Date(filtrosAtuais.dataFim);
-        endDate.setHours(23, 59, 59, 999); // Fim do dia
-        filteredData = filteredData.filter(d => 
-          new Date(d.created_at) <= endDate
-        );
-      }
-      
-      if (filtrosAtuais.rubricaId) {
-        filteredData = filteredData.filter(d => 
-          d.rubrica_id === filtrosAtuais.rubricaId
-        );
-      }
-      
-      if (filtrosAtuais.departamentoId) {
-        filteredData = filteredData.filter(d => 
-          d.usuario?.departamento_id === filtrosAtuais.departamentoId
-        );
-      }
-      
-      if (filtrosAtuais.valorMin) {
-        const valorMin = Number(filtrosAtuais.valorMin);
-        filteredData = filteredData.filter(d => d.valor >= valorMin);
-      }
-      
-      if (filtrosAtuais.valorMax) {
-        const valorMax = Number(filtrosAtuais.valorMax);
-        filteredData = filteredData.filter(d => d.valor <= valorMax);
-      }
-      
-      setDespesas(filteredData);
-      
-      // Resetar para primeira página quando os dados mudam
-      setCurrentPage(1);
-      
-      // Atualizar estatísticas após filtrar
-      calcularEstatisticas(filteredData);
-      
-      return filteredData;
+      return data;
     } catch (error) {
       console.error('Erro ao buscar despesas aprovadas:', error);
       setMessage({ text: 'Erro ao carregar despesas', type: 'error' });
+      setDespesas([]); // Limpar despesas em caso de erro
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -487,21 +464,7 @@ const FinancasContent: React.FC = () => {
       despesa.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
       despesa.id.toLowerCase().includes(searchTerm.toLowerCase());
       
-    // Aplicar filtros adicionais
-    const matchesValorMin = filtros.valorMin === '' || despesa.valor >= Number(filtros.valorMin);
-    const matchesValorMax = filtros.valorMax === '' || despesa.valor <= Number(filtros.valorMax);
-    const matchesRubrica = !filtros.rubricaId || despesa.rubrica_id === filtros.rubricaId;
-    
-    // Filtrar por data
-    const dataDespesa = new Date(despesa.created_at).setHours(0, 0, 0, 0);
-    const dataInicio = filtros.dataInicio ? new Date(filtros.dataInicio).setHours(0, 0, 0, 0) : null;
-    const dataFim = filtros.dataFim ? new Date(filtros.dataFim).setHours(0, 0, 0, 0) : null;
-    
-    const matchesDataInicio = !dataInicio || dataDespesa >= dataInicio;
-    const matchesDataFim = !dataFim || dataDespesa <= dataFim;
-    
-    return matchesSearch && matchesValorMin && matchesValorMax && 
-           matchesRubrica && matchesDataInicio && matchesDataFim;
+    return matchesSearch;
   });
 
   // Paginação
