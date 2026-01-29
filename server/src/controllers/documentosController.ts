@@ -467,28 +467,46 @@ export const deleteDocumento = async (req: Request, res: Response) => {
 export const downloadDocumento = async (req: Request, res: Response) => {
   try {
     const { filename } = req.params;
+    console.log('Download requested for filename:', filename);
     
-    const query = `
+    // First try exact filename match
+    let query = `
       SELECT caminho_arquivo, nome_original, tipo_arquivo
       FROM documentos
-      WHERE caminho_arquivo LIKE '%' + @filename + '%' AND ativo = 1
+      WHERE caminho_arquivo LIKE '%\\' + @filename AND ativo = 1
     `;
     
-    const results = await executeQuery(query, { filename });
+    let results = await executeQuery(query, { filename });
+    
+    // If no exact match, try partial match
+    if (results.length === 0) {
+      query = `
+        SELECT caminho_arquivo, nome_original, tipo_arquivo
+        FROM documentos
+        WHERE caminho_arquivo LIKE '%' + @filename + '%' AND ativo = 1
+      `;
+      results = await executeQuery(query, { filename });
+    }
     
     if (results.length === 0) {
+      console.log('No document found for filename:', filename);
       return res.status(404).json({ error: 'Arquivo não encontrado' });
     }
     
     const documento = results[0];
     const filePath = documento.caminho_arquivo;
+    console.log('Found document with path:', filePath);
     
     if (!fs.existsSync(filePath)) {
+      console.log('Physical file not found at path:', filePath);
       return res.status(404).json({ error: 'Arquivo físico não encontrado' });
     }
     
-    res.setHeader('Content-Type', documento.tipo_arquivo);
+    res.setHeader('Content-Type', documento.tipo_arquivo || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${documento.nome_original}"`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     
     const fileStream = fs.createReadStream(filePath);
     fileStream.pipe(res);

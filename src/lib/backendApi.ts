@@ -375,13 +375,45 @@ export const documentosAPI = {
     body: JSON.stringify(data)
   }),
   delete: (id: string) => fetchAPI(`/documentos/${id}`, { method: 'DELETE' }),
-  download: (filename: string) => {
-    const link = document.createElement('a');
-    link.href = `${API_BASE_URL}/documentos/download/${filename}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  download: async (filename: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/documentos/download/${filename}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      // Get the filename from Content-Disposition header or use the provided filename
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let downloadFilename = filename;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          downloadFilename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = downloadFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      throw error;
+    }
   },
   getHistorico: (documentoId: string) => fetchAPI<any[]>(`/documentos/${documentoId}/historico`),
   

@@ -19,7 +19,7 @@ router.get('/:documentoId/historico', getHistoricoByDocumentoId);
 router.post('/', upload.single('file'), createDocumento);
 router.put('/:id', updateDocumento);
 router.delete('/:id', deleteDocumento);
-router.get('/:filename/download', downloadDocumento);
+router.get('/download/:filename', downloadDocumento);
 
 router.get('/:documentoId/comentarios', getComentariosByDocumentoId);
 router.post('/:documentoId/comentarios', createComentario);

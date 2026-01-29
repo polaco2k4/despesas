@@ -328,9 +328,19 @@ const Documentos: React.FC = () => {
     }
   };
 
-  const handleDownload = (filename: string) => {
-    const filenameFromPath = filename.split('\\').pop()?.split('/').pop() || filename;
-    documentosAPI.download(filenameFromPath);
+  const handleDownload = async (filename: string) => {
+    try {
+      const filenameFromPath = filename.split('\\').pop()?.split('/').pop() || filename;
+      await documentosAPI.download(filenameFromPath);
+    } catch (error) {
+      console.error('Download error:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro no Download',
+        message: 'Erro ao baixar o arquivo. Verifique se o arquivo existe.',
+        type: 'error'
+      });
+    }
   };
 
   const formatFileSize = (bytes: number) => {
