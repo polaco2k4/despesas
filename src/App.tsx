@@ -13,6 +13,7 @@ import Configuracoes from './components/Configuracoes';
 import Financas from './components/Financas';
 import Usuarios from './components/Usuarios';
 import Departamentos from './components/Departamentos';
+import Documentos from './components/Documentos';
 // Import removed as it's not needed for now
 
 const PrivateRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
@@ -85,6 +86,12 @@ const AppContent: React.FC = () => {
         path="/fornecedores"
         element={
           <PrivateRoute element={<Fornecedores />} />
+        }
+      />
+      <Route
+        path="/documentos"
+        element={
+          <PrivateRoute element={<Documentos />} />
         }
       />
       <Route

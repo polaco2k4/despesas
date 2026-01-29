@@ -91,3 +91,51 @@ export interface DashboardStats {
   despesasNegadas: number;
   utilizacaoOrcamento: number;
 }
+
+export interface Documento {
+  id: string;
+  nome: string;
+  nome_original: string;
+  descricao?: string;
+  tipo_arquivo: string;
+  tamanho: number;
+  caminho_arquivo: string;
+  url_acesso?: string;
+  categoria?: string;
+  tags?: string;
+  criado_por: string;
+  departamento_id?: string;
+  publico: boolean;
+  ativo: boolean;
+  versao: number;
+  documento_pai_id?: string;
+  created_at: string;
+  updated_at: string;
+  criador?: Usuario;
+  departamento?: Departamento;
+  documento_pai?: Documento;
+  versoes?: Documento[];
+  permissoes?: PermissaoDocumento[];
+}
+
+export interface PermissaoDocumento {
+  id: string;
+  documento_id: string;
+  usuario_id?: string;
+  departamento_id?: string;
+  role?: UserRole;
+  permissao: 'leitura' | 'escrita' | 'admin';
+  created_at: string;
+  usuario?: Usuario;
+  departamento?: Departamento;
+}
+
+export interface DocumentoUpload {
+  file: File;
+  nome?: string;
+  descricao?: string;
+  categoria?: string;
+  tags?: string;
+  publico?: boolean;
+  departamento_id?: string;
+}

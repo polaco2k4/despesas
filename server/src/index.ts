@@ -16,27 +16,50 @@ import aprovacoesRoutes from './routes/aprovacoes.js';
 import dashboardRoutes from './routes/dashboard.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
 import notificacoesRoutes from './routes/notificacoes.js';
+import documentosRoutes from './routes/documentosRoutes.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
-app.use(helmet());
-app.use(morgan('dev'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Middleware para garantir charset UTF-8 em todas as respostas
-app.use((req, res, next) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  next();
-});
-
 app.use(cors({
   origin: true, // Allow all origins for network access
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-id', 'x-user-role', 'x-user-department-id']
 }));
+
+app.use(helmet());
+app.use(morgan('dev'));
+
+// Apply JSON parsing to all routes except multipart uploads
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.startsWith('multipart/form-data')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  const contentType = req.headers['content-type'] || '';
+  if (contentType.startsWith('multipart/form-data')) {
+    return next();
+  }
+  express.urlencoded({ extended: true, limit: '10mb' })(req, res, next);
+});
+
+// Register document routes
+app.use('/api/documentos', documentosRoutes);
+
+// Middleware para garantir charset UTF-8 em todas as respostas (exceto para uploads)
+app.use((req, res, next) => {
+  if (!req.path.includes('/documentos') || req.method !== 'POST') {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+  next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/departamentos', departamentosRoutes);

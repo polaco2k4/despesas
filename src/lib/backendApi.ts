@@ -11,10 +11,27 @@ const getApiBaseUrl = () => {
 const API_BASE_URL = getApiBaseUrl();
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  
+  // Only add Content-Type: application/json if body is not FormData
+  if (!(options?.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  
+  // Add user context headers for role-based access control
+  const userProfile = JSON.parse(localStorage.getItem('sgbd_user') || '{}');
+  if (userProfile.id) {
+    headers['x-user-id'] = userProfile.id;
+    headers['x-user-role'] = userProfile.role;
+    if (userProfile.departamento_id) {
+      headers['x-user-department-id'] = userProfile.departamento_id;
+    }
+  }
+
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...headers,
       ...options?.headers,
     },
   });
@@ -324,4 +341,50 @@ export const notificacoesAPI = {
   
   getContagemNaoLidas: (usuarioId: string) =>
     fetchAPI<{ count: number }>(`/notificacoes/usuario/${usuarioId}/nao-lidas`),
+};
+
+export interface DocumentoFilters {
+  categoria?: string;
+  departamento_id?: string;
+  criado_por?: string;
+  publico?: boolean;
+  ativo?: boolean;
+}
+
+export const documentosAPI = {
+  getAll: (filters?: DocumentoFilters) => {
+    const params = new URLSearchParams();
+    if (filters?.categoria) params.append('categoria', filters.categoria);
+    if (filters?.departamento_id) params.append('departamento_id', filters.departamento_id);
+    if (filters?.criado_por) params.append('criado_por', filters.criado_por);
+    if (filters?.publico !== undefined) params.append('publico', filters.publico ? '1' : '0');
+    if (filters?.ativo !== undefined) params.append('ativo', filters.ativo ? '1' : '0');
+    
+    const queryString = params.toString();
+    return fetchAPI<any[]>(`/documentos${queryString ? '?' + queryString : ''}`);
+  },
+  
+  getById: (id: string) => fetchAPI<any>(`/documentos/${id}`),
+  
+  create: (formData: FormData) =>
+    fetchAPI<any>('/documentos', {
+      method: 'POST',
+      body: formData,
+      headers: {}
+    }),
+  
+  update: (id: string, data: any) =>
+    fetchAPI<any>(`/documentos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id: string) =>
+    fetchAPI<void>(`/documentos/${id}`, {
+      method: 'DELETE',
+    }),
+  
+  download: (filename: string) => {
+    window.open(`${API_BASE_URL}/documentos/${filename}/download`, '_blank');
+  }
 };
