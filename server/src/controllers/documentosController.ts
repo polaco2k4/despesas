@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
+import { createHistorico } from './historicoDocumentosController.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -284,6 +285,19 @@ export const createDocumento = async (req: Request, res: Response) => {
     });
     
     const documento = await getDocumentoByIdInternal(result[0].id);
+    
+    // Registrar histórico de criação
+    await createHistorico(
+      result[0].id,
+      criado_por,
+      'criacao',
+      undefined,
+      undefined,
+      undefined,
+      `Documento "${documentoNome}" foi criado`,
+      req.ip
+    );
+    
     res.status(201).json(documento);
   } catch (error) {
     console.error('Error creating documento:', error);
@@ -295,6 +309,7 @@ export const updateDocumento = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const userId = req.headers['x-user-id'] as string;
     
     console.log('🔍 Debug updateDocumento - ID:', id);
     console.log('🔍 Debug updateDocumento - req.body:', updates);
@@ -304,32 +319,110 @@ export const updateDocumento = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Dados de atualização não fornecidos' });
     }
     
+    // Buscar documento atual para comparar valores
+    const documentoAtual = await getDocumentoByIdInternal(id);
+    if (!documentoAtual) {
+      return res.status(404).json({ error: 'Documento não encontrado' });
+    }
+    
     const fields = [];
     const params: Record<string, any> = { id };
     
     if (updates.nome !== undefined) {
       fields.push('nome = @nome');
       params.nome = updates.nome;
+      if (documentoAtual.nome !== updates.nome) {
+        await createHistorico(
+          id,
+          userId,
+          'edicao',
+          'nome',
+          documentoAtual.nome,
+          updates.nome,
+          `Nome alterado de "${documentoAtual.nome}" para "${updates.nome}"`,
+          req.ip
+        );
+      }
     }
     if (updates.descricao !== undefined) {
       fields.push('descricao = @descricao');
       params.descricao = updates.descricao;
+      if (documentoAtual.descricao !== updates.descricao) {
+        await createHistorico(
+          id,
+          userId,
+          'edicao',
+          'descricao',
+          documentoAtual.descricao || '',
+          updates.descricao,
+          `Descrição alterada`,
+          req.ip
+        );
+      }
     }
     if (updates.categoria !== undefined) {
       fields.push('categoria = @categoria');
       params.categoria = updates.categoria;
+      if (documentoAtual.categoria !== updates.categoria) {
+        await createHistorico(
+          id,
+          userId,
+          'edicao',
+          'categoria',
+          documentoAtual.categoria || '',
+          updates.categoria,
+          `Categoria alterada de "${documentoAtual.categoria || 'Nenhuma'}" para "${updates.categoria}"`,
+          req.ip
+        );
+      }
     }
     if (updates.tags !== undefined) {
       fields.push('tags = @tags');
       params.tags = updates.tags;
+      if (documentoAtual.tags !== updates.tags) {
+        await createHistorico(
+          id,
+          userId,
+          'edicao',
+          'tags',
+          documentoAtual.tags || '',
+          updates.tags,
+          `Tags alteradas`,
+          req.ip
+        );
+      }
     }
     if (updates.publico !== undefined) {
       fields.push('publico = @publico');
       params.publico = updates.publico;
+      if (documentoAtual.publico !== updates.publico) {
+        await createHistorico(
+          id,
+          userId,
+          'edicao',
+          'publico',
+          documentoAtual.publico ? 'Público' : 'Privado',
+          updates.publico ? 'Público' : 'Privado',
+          `Visibilidade alterada para ${updates.publico ? 'Público' : 'Privado'}`,
+          req.ip
+        );
+      }
     }
     if (updates.departamento_id !== undefined) {
       fields.push('departamento_id = @departamento_id');
       params.departamento_id = updates.departamento_id;
+      if (documentoAtual.departamento_id !== updates.departamento_id) {
+        await createHistorico(
+          id,
+          userId,
+          'edicao',
+          'departamento_id',
+          documentoAtual.departamento_id || '',
+          updates.departamento_id,
+          `Departamento alterado`,
+          req.ip
+        );
+      }
     }
     
     if (fields.length === 0) {
@@ -419,10 +512,15 @@ async function getDocumentoByIdInternal(id: string) {
     FROM documentos d
     LEFT JOIN usuarios u ON d.criado_por = u.id
     LEFT JOIN departamentos dep ON d.departamento_id = dep.id
-    WHERE d.id = @id
+    WHERE d.id = @id AND d.ativo = 1
   `;
   
   const results = await executeQuery(query, { id });
+  
+  if (!results || results.length === 0) {
+    return null;
+  }
+  
   const row = results[0];
   
   return {

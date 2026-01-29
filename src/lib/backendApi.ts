@@ -352,39 +352,50 @@ export interface DocumentoFilters {
 }
 
 export const documentosAPI = {
-  getAll: (filters?: DocumentoFilters) => {
+  getAll: (filters?: any) => {
     const params = new URLSearchParams();
-    if (filters?.categoria) params.append('categoria', filters.categoria);
-    if (filters?.departamento_id) params.append('departamento_id', filters.departamento_id);
-    if (filters?.criado_por) params.append('criado_por', filters.criado_por);
-    if (filters?.publico !== undefined) params.append('publico', filters.publico ? '1' : '0');
-    if (filters?.ativo !== undefined) params.append('ativo', filters.ativo ? '1' : '0');
-    
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+    }
     const queryString = params.toString();
-    return fetchAPI<any[]>(`/documentos${queryString ? '?' + queryString : ''}`);
+    return fetchAPI<Documento[]>(`/documentos${queryString ? `?${queryString}` : ''}`);
   },
-  
-  getById: (id: string) => fetchAPI<any>(`/documentos/${id}`),
-  
-  create: (formData: FormData) =>
-    fetchAPI<any>('/documentos', {
-      method: 'POST',
-      body: formData,
-      headers: {}
-    }),
-  
-  update: (id: string, data: any) =>
-    fetchAPI<any>(`/documentos/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  
-  delete: (id: string) =>
-    fetchAPI<void>(`/documentos/${id}`, {
-      method: 'DELETE',
-    }),
-  
+  getById: (id: string) => fetchAPI<Documento>(`/documentos/${id}`),
+  create: (formData: FormData) => fetchAPI<Documento>('/documentos', {
+    method: 'POST',
+    body: formData
+  }),
+  update: (id: string, data: any) => fetchAPI<Documento>(`/documentos/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }),
+  delete: (id: string) => fetchAPI(`/documentos/${id}`, { method: 'DELETE' }),
   download: (filename: string) => {
-    window.open(`${API_BASE_URL}/documentos/${filename}/download`, '_blank');
-  }
+    const link = document.createElement('a');
+    link.href = `${API_BASE_URL}/documentos/download/${filename}`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+  getHistorico: (documentoId: string) => fetchAPI<any[]>(`/documentos/${documentoId}/historico`),
+  
+  // Comentários
+  getComentarios: (documentoId: string) => fetchAPI<any[]>(`/documentos/${documentoId}/comentarios`),
+  createComentario: (documentoId: string, comentario: string) => fetchAPI<any>(`/documentos/${documentoId}/comentarios`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comentario })
+  }),
+  updateComentario: (comentarioId: string, comentario: string) => fetchAPI<any>(`/documentos/comentarios/${comentarioId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comentario })
+  }),
+  deleteComentario: (comentarioId: string) => fetchAPI(`/documentos/comentarios/${comentarioId}`, { method: 'DELETE' }),
 };

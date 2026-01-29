@@ -40,8 +40,14 @@ const Documentos: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<Documento | null>(null);
+  const [documentHistory, setDocumentHistory] = useState<any[]>([]);
+  const [documentComments, setDocumentComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [editingComment, setEditingComment] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState('');
   const [uploadForm, setUploadForm] = useState({
     nome: '',
     descricao: '',
@@ -108,6 +114,94 @@ const Documentos: React.FC = () => {
       setDepartamentos(data);
     } catch (error) {
       console.error('Erro ao buscar departamentos:', error);
+    }
+  };
+
+  const fetchDocumentHistory = async (documentoId: string) => {
+    try {
+      const data = await documentosAPI.getHistorico(documentoId);
+      setDocumentHistory(data);
+    } catch (error) {
+      console.error('Erro ao buscar histórico do documento:', error);
+      setDocumentHistory([]);
+    }
+  };
+
+  const handleViewDetails = async (documento: Documento) => {
+    setSelectedDocument(documento);
+    setShowDetailsModal(true);
+    await Promise.all([
+      fetchDocumentHistory(documento.id),
+      fetchDocumentComments(documento.id)
+    ]);
+  };
+
+  const fetchDocumentComments = async (documentoId: string) => {
+    try {
+      const data = await documentosAPI.getComentarios(documentoId);
+      setDocumentComments(data);
+    } catch (error) {
+      console.error('Erro ao buscar comentários do documento:', error);
+      setDocumentComments([]);
+    }
+  };
+
+  const handleCreateComment = async () => {
+    if (!selectedDocument || !newComment.trim()) return;
+
+    try {
+      const novoComentario = await documentosAPI.createComentario(selectedDocument.id, newComment.trim());
+      setDocumentComments(prev => [novoComentario, ...prev]);
+      setNewComment('');
+    } catch (error) {
+      console.error('Erro ao criar comentário:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao criar comentário',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleEditComment = (comentario: any) => {
+    setEditingComment(comentario.id);
+    setEditCommentText(comentario.comentario);
+  };
+
+  const handleUpdateComment = async (comentarioId: string) => {
+    if (!editCommentText.trim()) return;
+
+    try {
+      const comentarioAtualizado = await documentosAPI.updateComentario(comentarioId, editCommentText.trim());
+      setDocumentComments(prev => 
+        prev.map(c => c.id === comentarioId ? comentarioAtualizado : c)
+      );
+      setEditingComment(null);
+      setEditCommentText('');
+    } catch (error) {
+      console.error('Erro ao atualizar comentário:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao atualizar comentário',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleDeleteComment = async (comentarioId: string) => {
+    try {
+      await documentosAPI.deleteComentario(comentarioId);
+      setDocumentComments(prev => prev.filter(c => c.id !== comentarioId));
+    } catch (error) {
+      console.error('Erro ao deletar comentário:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao deletar comentário',
+        type: 'error'
+      });
     }
   };
 
@@ -248,13 +342,19 @@ const Documentos: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-PT', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return new Date(dateString).toLocaleString('pt-BR');
+  };
+
+  const getFieldDisplayName = (fieldName: string) => {
+    const fieldNames: { [key: string]: string } = {
+      'departamento_id': 'Departamento',
+      'nome': 'Nome',
+      'descricao': 'Descrição',
+      'categoria': 'Categoria',
+      'tags': 'Tags',
+      'publico': 'Visibilidade'
+    };
+    return fieldNames[fieldName] || fieldName;
   };
 
   const getCategoryColor = (categoria?: string) => {
@@ -374,7 +474,10 @@ const Documentos: React.FC = () => {
             {filteredDocumentos.map((documento) => (
               <tr key={documento.id} className="hover:bg-gray-50">
                 <td className="px-3 py-4">
-                  <div className="flex items-center">
+                  <div 
+                    className="flex items-center cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+                    onClick={() => handleViewDetails(documento)}
+                  >
                     <div className="flex-shrink-0 h-10 w-10">
                       <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
                         <span className="text-blue-600 font-medium text-sm">
@@ -383,7 +486,7 @@ const Documentos: React.FC = () => {
                       </div>
                     </div>
                     <div className="ml-4">
-                      <div className="text-sm font-medium text-gray-900">{documento.nome}</div>
+                      <div className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">{documento.nome}</div>
                       {documento.descricao && (
                         <div className="text-sm text-gray-500">{documento.descricao}</div>
                       )}
@@ -706,9 +809,312 @@ const Documentos: React.FC = () => {
         </div>
       )}
 
+      {/* Modal de Detalhes do Documento */}
+      {showDetailsModal && selectedDocument && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-10 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-medium text-gray-900">Detalhes do Documento</h3>
+                <button
+                  onClick={() => {
+                    setShowDetailsModal(false);
+                    setSelectedDocument(null);
+                    setDocumentHistory([]);
+                    setDocumentComments([]);
+                    setNewComment('');
+                    setEditingComment(null);
+                    setEditCommentText('');
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Informações do Documento */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Informações Gerais</h4>
+                    
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Nome</label>
+                        <p className="text-sm text-gray-900">{selectedDocument.nome}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Nome Original</label>
+                        <p className="text-sm text-gray-900">{selectedDocument.nome_original}</p>
+                      </div>
+                      
+                      {selectedDocument.descricao && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Descrição</label>
+                          <p className="text-sm text-gray-900">{selectedDocument.descricao}</p>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tipo de Arquivo</label>
+                        <p className="text-sm text-gray-900">{selectedDocument.tipo_arquivo}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Tamanho</label>
+                        <p className="text-sm text-gray-900">{formatFileSize(selectedDocument.tamanho)}</p>
+                      </div>
+                      
+                      {selectedDocument.categoria && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Categoria</label>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(selectedDocument.categoria)}`}>
+                            {selectedDocument.categoria}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {selectedDocument.tags && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Tags</label>
+                          <p className="text-sm text-gray-900">{selectedDocument.tags}</p>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Visibilidade</label>
+                        {selectedDocument.publico ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Público
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Privado
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Criado por</label>
+                        <p className="text-sm text-gray-900">{selectedDocument.criador?.nome}</p>
+                        <p className="text-xs text-gray-500">{selectedDocument.criador?.email}</p>
+                      </div>
+                      
+                      {selectedDocument.departamento && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Departamento</label>
+                          <p className="text-sm text-gray-900">{selectedDocument.departamento.nome}</p>
+                        </div>
+                      )}
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Data de Criação</label>
+                        <p className="text-sm text-gray-900">{formatDate(selectedDocument.created_at)}</p>
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Última Atualização</label>
+                        <p className="text-sm text-gray-900">{formatDate(selectedDocument.updated_at)}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => handleDownload(selectedDocument.caminho_arquivo)}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors flex items-center justify-center"
+                      >
+                        <Download size={16} className="mr-2" />
+                        Baixar Documento
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Histórico de Alterações */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Histórico de Alterações</h4>
+                    
+                    <div className="max-h-96 overflow-y-auto space-y-3">
+                      {documentHistory.length > 0 ? (
+                        documentHistory.map((historico, index) => (
+                          <div key={index} className="bg-white p-3 rounded-lg border border-gray-200">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                    historico.tipo_alteracao === 'criacao' ? 'bg-blue-100 text-blue-800' :
+                                    historico.tipo_alteracao === 'edicao' ? 'bg-yellow-100 text-yellow-800' :
+                                    historico.tipo_alteracao === 'visualizacao' ? 'bg-green-100 text-green-800' :
+                                    historico.tipo_alteracao === 'download' ? 'bg-purple-100 text-purple-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {historico.tipo_alteracao}
+                                  </span>
+                                  {historico.campo_alterado && (
+                                    <span className="text-xs text-gray-500">
+                                      {getFieldDisplayName(historico.campo_alterado)}
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <p className="text-sm text-gray-900 mb-1">
+                                  {historico.descricao_alteracao}
+                                </p>
+                                
+                                {historico.valor_antigo && historico.valor_novo && (
+                                  <div className="text-xs text-gray-600 mt-1">
+                                    <span className="font-medium">De:</span> {historico.valor_antigo} → 
+                                    <span className="font-medium"> Para:</span> {historico.valor_novo}
+                                  </div>
+                                )}
+                                
+                                <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                                  <span>
+                                    Por: <span className="font-medium">{historico.usuario?.nome}</span>
+                                  </span>
+                                  <span>
+                                    {formatDate(historico.data_alteracao)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <FileText size={48} className="mx-auto mb-2 text-gray-300" />
+                          <p>Nenhum histórico encontrado</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comentários */}
+                <div className="space-y-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">Comentários</h4>
+                    
+                    {/* Formulário para novo comentário */}
+                    <div className="mb-4">
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Adicionar um comentário..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none"
+                        rows={3}
+                      />
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={handleCreateComment}
+                          disabled={!newComment.trim()}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                        >
+                          Comentar
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Lista de comentários */}
+                    <div className="max-h-96 overflow-y-auto space-y-3">
+                      {documentComments.length > 0 ? (
+                        documentComments.map((comentario) => (
+                          <div key={comentario.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <span className="text-blue-600 font-medium text-sm">
+                                    {comentario.usuario?.nome?.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {comentario.usuario?.nome}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {formatDate(comentario.created_at)}
+                                    {comentario.updated_at !== comentario.created_at && (
+                                      <span className="ml-1">(editado)</span>
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              {(userProfile?.role === 'admin' || comentario.usuario_id === userProfile?.id) && (
+                                <div className="flex space-x-1">
+                                  <button
+                                    onClick={() => handleEditComment(comentario)}
+                                    className="p-1 text-gray-400 hover:text-blue-600 rounded"
+                                    title="Editar"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteComment(comentario.id)}
+                                    className="p-1 text-gray-400 hover:text-red-600 rounded"
+                                    title="Excluir"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {editingComment === comentario.id ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={editCommentText}
+                                  onChange={(e) => setEditCommentText(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md resize-none text-sm"
+                                  rows={3}
+                                />
+                                <div className="flex justify-end space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingComment(null);
+                                      setEditCommentText('');
+                                    }}
+                                    className="px-3 py-1 text-gray-600 hover:text-gray-800 text-sm"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateComment(comentario.id)}
+                                    disabled={!editCommentText.trim()}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-sm"
+                                  >
+                                    Salvar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                {comentario.comentario}
+                              </p>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-gray-500">
+                          <FileText size={48} className="mx-auto mb-2 text-gray-300" />
+                          <p>Nenhum comentário ainda</p>
+                          <p className="text-xs mt-1">Seja o primeiro a comentar!</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AlertDialog
         isOpen={alertDialog.isOpen}
-        onClose={() => setAlertDialog({ ...alertDialog, isOpen: false })}
+        onClose={() => setAlertDialog(prev => ({ ...prev, isOpen: false }))}
         title={alertDialog.title}
         message={alertDialog.message}
         type={alertDialog.type}

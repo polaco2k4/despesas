@@ -26,7 +26,7 @@ const PORT = Number(process.env.PORT) || 3001;
 app.use(cors({
   origin: true, // Allow all origins for network access
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-user-id', 'x-user-role', 'x-user-department-id']
 }));
 
