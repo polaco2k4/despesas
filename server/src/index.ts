@@ -17,6 +17,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import fornecedoresRoutes from './routes/fornecedores.js';
 import notificacoesRoutes from './routes/notificacoes.js';
 import documentosRoutes from './routes/documentosRoutes.js';
+import expedientesRoutes from './routes/expedientesRoutes.js';
 
 dotenv.config();
 
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 
 // Register document routes
 app.use('/api/documentos', documentosRoutes);
+app.use('/api/expedientes', expedientesRoutes);
 
 // Middleware para garantir charset UTF-8 em todas as respostas (exceto para uploads)
 app.use((req, res, next) => {

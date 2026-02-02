@@ -328,10 +328,16 @@ const Documentos: React.FC = () => {
     }
   };
 
-  const handleDownload = async (filename: string) => {
+  const handleDownload = async (documento: any) => {
     try {
-      const filenameFromPath = filename.split('\\').pop()?.split('/').pop() || filename;
-      await documentosAPI.download(filenameFromPath);
+      if (documento.id) {
+        // Use downloadById for more reliability
+        await documentosAPI.downloadById(documento.id);
+      } else {
+        // Fallback to filename method
+        const filenameFromPath = documento.caminho_arquivo?.split('\\').pop()?.split('/').pop() || documento.nome;
+        await documentosAPI.download(filenameFromPath);
+      }
     } catch (error) {
       console.error('Download error:', error);
       setAlertDialog({
@@ -539,7 +545,7 @@ const Documentos: React.FC = () => {
                 <td className="px-3 py-4 text-center">
                   <div className="flex items-center justify-center space-x-2">
                     <button
-                      onClick={() => handleDownload(documento.caminho_arquivo)}
+                      onClick={() => handleDownload(documento)}
                       className="p-2 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded-full transition-colors"
                       title="Download"
                     >
@@ -931,7 +937,7 @@ const Documentos: React.FC = () => {
 
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <button
-                        onClick={() => handleDownload(selectedDocument.caminho_arquivo)}
+                        onClick={() => handleDownload(selectedDocument)}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-md transition-colors flex items-center justify-center"
                       >
                         <Download size={16} className="mr-2" />

@@ -415,6 +415,46 @@ export const documentosAPI = {
       throw error;
     }
   },
+  downloadById: async (documentId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/documentos/download-by-id/${documentId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      // Get the filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let downloadFilename = 'document';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          downloadFilename = filenameMatch[1];
+        }
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = downloadFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      throw error;
+    }
+  },
   getHistorico: (documentoId: string) => fetchAPI<any[]>(`/documentos/${documentoId}/historico`),
   
   // Comentários
@@ -430,4 +470,74 @@ export const documentosAPI = {
     body: JSON.stringify({ comentario })
   }),
   deleteComentario: (comentarioId: string) => fetchAPI(`/documentos/comentarios/${comentarioId}`, { method: 'DELETE' }),
+};
+
+import type { Expediente, ExpedienteFilters, ExpedienteDocumento, Documento } from '../types/database';
+
+export const expedientesAPI = {
+  getAll: (filters?: ExpedienteFilters) => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const queryString = params.toString();
+    return fetchAPI<Expediente[]>(`/expedientes${queryString ? `?${queryString}` : ''}`);
+  },
+  
+  getById: (id: string) => fetchAPI<Expediente>(`/expedientes/${id}`),
+  
+  create: (data: {
+    titulo: string;
+    descricao?: string;
+    tipo: string;
+    prioridade?: string;
+    data_prazo?: string;
+    responsavel_id?: string;
+    departamento_id?: string;
+    observacoes?: string;
+    publico?: boolean;
+  }) => fetchAPI<Expediente>('/expedientes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }),
+  
+  update: (id: string, data: {
+    titulo?: string;
+    descricao?: string;
+    tipo?: string;
+    status?: string;
+    prioridade?: string;
+    data_prazo?: string;
+    data_fechamento?: string;
+    responsavel_id?: string;
+    departamento_id?: string;
+    observacoes?: string;
+    publico?: boolean;
+  }) => fetchAPI<Expediente>(`/expedientes/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }),
+  
+  delete: (id: string) => fetchAPI(`/expedientes/${id}`, { method: 'DELETE' }),
+  
+  // Document management
+  getDocumentos: (expedienteId: string) => fetchAPI<ExpedienteDocumento[]>(`/expedientes/${expedienteId}/documentos`),
+  
+  addDocumento: (expedienteId: string, data: {
+    documento_id: string;
+    observacoes?: string;
+  }) => fetchAPI<any>(`/expedientes/${expedienteId}/documentos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }),
+  
+  removeDocumento: (expedienteId: string, documentoId: string) => 
+    fetchAPI(`/expedientes/${expedienteId}/documentos/${documentoId}`, { method: 'DELETE' }),
 };

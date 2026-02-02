@@ -6,6 +6,7 @@ import {
   updateDocumento,
   deleteDocumento,
   downloadDocumento,
+  downloadDocumentoById,
   upload
 } from '../controllers/documentosController.js';
 import { getHistoricoByDocumentoId } from '../controllers/historicoDocumentosController.js';
@@ -14,12 +15,13 @@ import { getComentariosByDocumentoId, createComentario, updateComentario, delete
 const router = Router();
 
 router.get('/', getAllDocumentos);
+router.get('/download/:filename', downloadDocumento);
+router.get('/download-by-id/:id', downloadDocumentoById);
 router.get('/:id', getDocumentoById);
 router.get('/:documentoId/historico', getHistoricoByDocumentoId);
 router.post('/', upload.single('file'), createDocumento);
 router.put('/:id', updateDocumento);
 router.delete('/:id', deleteDocumento);
-router.get('/download/:filename', downloadDocumento);
 
 router.get('/:documentoId/comentarios', getComentariosByDocumentoId);
 router.post('/:documentoId/comentarios', createComentario);

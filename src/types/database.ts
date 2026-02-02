@@ -139,3 +139,52 @@ export interface DocumentoUpload {
   publico?: boolean;
   departamento_id?: string;
 }
+
+export interface Expediente {
+  id: string;
+  numero: string;
+  titulo: string;
+  descricao?: string;
+  tipo: 'administrativo' | 'juridico' | 'financeiro' | 'rh' | 'outros';
+  status: 'aberto' | 'em_andamento' | 'suspenso' | 'fechado';
+  prioridade: 'baixa' | 'media' | 'alta' | 'urgente';
+  data_abertura: string;
+  data_prazo?: string;
+  data_fechamento?: string;
+  criado_por: string;
+  responsavel_id?: string;
+  departamento_id?: string;
+  observacoes?: string;
+  publico: boolean;
+  ativo: boolean;
+  created_at: string;
+  updated_at: string;
+  criador?: Usuario;
+  responsavel?: Usuario;
+  departamento?: Departamento;
+  documentos?: Documento[];
+  total_documentos?: number;
+}
+
+export interface ExpedienteDocumento {
+  id: string;
+  expediente_id: string;
+  documento_id: string;
+  adicionado_por: string;
+  data_adicao: string;
+  observacoes?: string;
+  documento?: Documento;
+  adicionado_por_usuario?: Usuario;
+}
+
+export interface ExpedienteFilters {
+  tipo?: string;
+  status?: string;
+  prioridade?: string;
+  departamento_id?: string;
+  criado_por?: string;
+  responsavel_id?: string;
+  publico?: boolean;
+  data_inicio?: string;
+  data_fim?: string;
+}

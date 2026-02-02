@@ -16,7 +16,8 @@ import {
   Receipt,
   Truck,
   DollarSign,
-  FolderOpen
+  FolderOpen,
+  Folder
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -44,6 +45,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
     { id: 'fornecedores', label: 'Fornecedores', icon: Truck, roles: ['admin', 'gestor'] },
     { id: 'documentos', label: 'Documentos', icon: FolderOpen, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
+    { id: 'expedientes', label: 'Expedientes', icon: Folder, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
     { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor', 'adm_area'] },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
   ];

@@ -467,35 +467,68 @@ export const deleteDocumento = async (req: Request, res: Response) => {
 export const downloadDocumento = async (req: Request, res: Response) => {
   try {
     const { filename } = req.params;
-    console.log('Download requested for filename:', filename);
+    console.log('Download by filename requested:', filename);
     
-    // First try exact filename match
+    // Download by filename - try multiple approaches
+    const searchParam = filename;
+    let results = [];
+    
+    // Try multiple query approaches to find the document
     let query = `
-      SELECT caminho_arquivo, nome_original, tipo_arquivo
+      SELECT caminho_arquivo, nome_original, tipo_arquivo, nome
       FROM documentos
-      WHERE caminho_arquivo LIKE '%\\' + @filename AND ativo = 1
+      WHERE caminho_arquivo LIKE '%' + @searchParam AND ativo = 1
     `;
     
-    let results = await executeQuery(query, { filename });
+    results = await executeQuery(query, { searchParam });
+    console.log('First query results:', results.length);
     
-    // If no exact match, try partial match
+    // If no results, try with different path separators
     if (results.length === 0) {
       query = `
-        SELECT caminho_arquivo, nome_original, tipo_arquivo
+        SELECT caminho_arquivo, nome_original, tipo_arquivo, nome
         FROM documentos
-        WHERE caminho_arquivo LIKE '%' + @filename + '%' AND ativo = 1
+        WHERE caminho_arquivo LIKE '%/' + @searchParam AND ativo = 1
       `;
-      results = await executeQuery(query, { filename });
+      results = await executeQuery(query, { searchParam });
+      console.log('Second query results:', results.length);
+    }
+    
+    // If still no results, try partial match
+    if (results.length === 0) {
+      query = `
+        SELECT caminho_arquivo, nome_original, tipo_arquivo, nome
+        FROM documentos
+        WHERE caminho_arquivo LIKE '%' + @searchParam + '%' AND ativo = 1
+      `;
+      results = await executeQuery(query, { searchParam });
+      console.log('Third query results:', results.length);
+    }
+    
+    // If still no results, try matching by nome field
+    if (results.length === 0) {
+      query = `
+        SELECT caminho_arquivo, nome_original, tipo_arquivo, nome
+        FROM documentos
+        WHERE nome = @searchParam AND ativo = 1
+      `;
+      results = await executeQuery(query, { searchParam });
+      console.log('Fourth query results:', results.length);
     }
     
     if (results.length === 0) {
       console.log('No document found for filename:', filename);
+      // Debug: show all documents to understand the data structure
+      const debugQuery = `SELECT TOP 5 id, caminho_arquivo, nome, nome_original FROM documentos WHERE ativo = 1`;
+      const debugResults = await executeQuery(debugQuery, {});
+      console.log('Sample documents in database:', debugResults);
       return res.status(404).json({ error: 'Arquivo não encontrado' });
     }
     
     const documento = results[0];
     const filePath = documento.caminho_arquivo;
     console.log('Found document with path:', filePath);
+    console.log('Document details:', documento);
     
     if (!fs.existsSync(filePath)) {
       console.log('Physical file not found at path:', filePath);
@@ -512,6 +545,54 @@ export const downloadDocumento = async (req: Request, res: Response) => {
     fileStream.pipe(res);
   } catch (error) {
     console.error('Error downloading documento:', error);
+    res.status(500).json({ error: 'Erro ao baixar documento' });
+  }
+};
+
+export const downloadDocumentoById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    console.log('Download by ID requested:', id);
+    
+    // Download by document ID - more reliable
+    const query = `
+      SELECT caminho_arquivo, nome_original, tipo_arquivo, nome
+      FROM documentos
+      WHERE id = @id AND ativo = 1
+    `;
+    
+    const results = await executeQuery(query, { id });
+    console.log('Download by ID results:', results.length);
+    
+    if (results.length === 0) {
+      console.log('No document found for ID:', id);
+      // Debug: show all documents to understand the data structure
+      const debugQuery = `SELECT TOP 5 id, caminho_arquivo, nome, nome_original FROM documentos WHERE ativo = 1`;
+      const debugResults = await executeQuery(debugQuery, {});
+      console.log('Sample documents in database:', debugResults);
+      return res.status(404).json({ error: 'Arquivo não encontrado' });
+    }
+    
+    const documento = results[0];
+    const filePath = documento.caminho_arquivo;
+    console.log('Found document with path:', filePath);
+    console.log('Document details:', documento);
+    
+    if (!fs.existsSync(filePath)) {
+      console.log('Physical file not found at path:', filePath);
+      return res.status(404).json({ error: 'Arquivo físico não encontrado' });
+    }
+    
+    res.setHeader('Content-Type', documento.tipo_arquivo || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${documento.nome_original}"`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error downloading documento by ID:', error);
     res.status(500).json({ error: 'Erro ao baixar documento' });
   }
 };
