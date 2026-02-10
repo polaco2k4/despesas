@@ -55,6 +55,14 @@ const Expedientes: React.FC = () => {
   const [documentSearch, setDocumentSearch] = useState('');
   const [loadingDocuments, setLoadingDocuments] = useState(false);
   
+  // History and comments states
+  const [expedienteHistory, setExpedienteHistory] = useState<any[]>([]);
+  const [expedienteComments, setExpedienteComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [editingComment, setEditingComment] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [activeTab, setActiveTab] = useState<'info' | 'history' | 'comments'>('info');
+  
   const [createForm, setCreateForm] = useState({
     titulo: '',
     descricao: '',
@@ -169,6 +177,95 @@ const Expedientes: React.FC = () => {
       setUsuarios(data);
     } catch (error) {
       console.error('Erro ao buscar usuários:', error);
+    }
+  };
+
+  const fetchExpedienteHistory = async (expedienteId: string) => {
+    try {
+      const data = await expedientesAPI.getHistorico(expedienteId);
+      setExpedienteHistory(data);
+    } catch (error) {
+      console.error('Erro ao buscar histórico do expediente:', error);
+      setExpedienteHistory([]);
+    }
+  };
+
+  const fetchExpedienteComments = async (expedienteId: string) => {
+    try {
+      const data = await expedientesAPI.getComentarios(expedienteId);
+      setExpedienteComments(data);
+    } catch (error) {
+      console.error('Erro ao buscar comentários do expediente:', error);
+      setExpedienteComments([]);
+    }
+  };
+
+  const handleViewDetails = async (expediente: Expediente) => {
+    setSelectedExpediente(expediente);
+    setShowDetailsModal(true);
+    setActiveTab('info');
+    await Promise.all([
+      fetchExpedienteHistory(expediente.id),
+      fetchExpedienteComments(expediente.id)
+    ]);
+  };
+
+  const handleCreateComment = async () => {
+    if (!selectedExpediente || !newComment.trim()) return;
+
+    try {
+      const novoComentario = await expedientesAPI.createComentario(selectedExpediente.id, newComment.trim());
+      setExpedienteComments(prev => [novoComentario, ...prev]);
+      setNewComment('');
+    } catch (error) {
+      console.error('Erro ao criar comentário:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao criar comentário',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleEditComment = (comentario: any) => {
+    setEditingComment(comentario.id);
+    setEditCommentText(comentario.comentario);
+  };
+
+  const handleUpdateComment = async (comentarioId: string) => {
+    if (!editCommentText.trim()) return;
+
+    try {
+      const comentarioAtualizado = await expedientesAPI.updateComentario(comentarioId, editCommentText.trim());
+      setExpedienteComments(prev => 
+        prev.map(c => c.id === comentarioId ? comentarioAtualizado : c)
+      );
+      setEditingComment(null);
+      setEditCommentText('');
+    } catch (error) {
+      console.error('Erro ao atualizar comentário:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao atualizar comentário',
+        type: 'error'
+      });
+    }
+  };
+
+  const handleDeleteComment = async (comentarioId: string) => {
+    try {
+      await expedientesAPI.deleteComentario(comentarioId);
+      setExpedienteComments(prev => prev.filter(c => c.id !== comentarioId));
+    } catch (error) {
+      console.error('Erro ao deletar comentário:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao deletar comentário',
+        type: 'error'
+      });
     }
   };
 
@@ -298,10 +395,6 @@ const Expedientes: React.FC = () => {
     setShowEditModal(true);
   };
 
-  const openDetailsModal = (expediente: Expediente) => {
-    setSelectedExpediente(expediente);
-    setShowDetailsModal(true);
-  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -349,14 +442,42 @@ const Expedientes: React.FC = () => {
 
   const canEdit = (expediente: Expediente) => {
     if (!userProfile) return false;
+    
+    // Expedientes fechados só podem ser editados por admin
+    if (expediente.status === 'fechado' && userProfile.role !== 'admin') {
+      return false;
+    }
+    
     return userProfile.role === 'admin' || 
            expediente.criado_por === userProfile.id ||
            expediente.responsavel_id === userProfile.id ||
            (userProfile.role === 'gestor' && expediente.departamento_id === userProfile.departamento_id);
   };
 
+  const canComment = (expediente: Expediente) => {
+    if (!userProfile) return false;
+    
+    // Expedientes fechados só podem receber comentários de admin
+    if (expediente.status === 'fechado' && userProfile.role !== 'admin') {
+      return false;
+    }
+    
+    // Verificar se tem acesso ao expediente
+    return userProfile.role === 'admin' || 
+           expediente.criado_por === userProfile.id ||
+           expediente.responsavel_id === userProfile.id ||
+           (userProfile.role === 'gestor' && expediente.departamento_id === userProfile.departamento_id) ||
+           (userProfile.role === 'adm_area' && expediente.publico);
+  };
+
   const canDelete = (expediente: Expediente) => {
     if (!userProfile) return false;
+    
+    // Expedientes fechados só podem ser excluídos por admin
+    if (expediente.status === 'fechado' && userProfile.role !== 'admin') {
+      return false;
+    }
+    
     return userProfile.role === 'admin' || 
            expediente.criado_por === userProfile.id ||
            (userProfile.role === 'gestor' && expediente.departamento_id === userProfile.departamento_id);
@@ -683,7 +804,7 @@ const Expedientes: React.FC = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => openDetailsModal(expediente)}
+                            onClick={() => handleViewDetails(expediente)}
                             className="text-blue-600 hover:text-blue-900"
                             title="Ver detalhes"
                           >
@@ -1198,7 +1319,7 @@ const Expedientes: React.FC = () => {
       {/* Details Modal */}
       {showDetailsModal && selectedExpediente && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Detalhes do Expediente</h3>
               <button
@@ -1209,117 +1330,312 @@ const Expedientes: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Número</label>
-                  <p className="text-sm text-gray-900 mt-1">#{selectedExpediente.numero}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Tipo</label>
-                  <p className="text-sm text-gray-900 mt-1 capitalize">{selectedExpediente.tipo}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Status</label>
-                  <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedExpediente.status)}`}>
-                    {getStatusIcon(selectedExpediente.status)}
-                    <span className="ml-1">{selectedExpediente.status.replace('_', ' ')}</span>
-                  </span>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Prioridade</label>
-                  <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(selectedExpediente.prioridade)}`}>
-                    {selectedExpediente.prioridade}
-                  </span>
-                </div>
-              </div>
+            {/* Tab Navigation */}
+            <div className="border-b border-gray-200 mb-6">
+              <nav className="-mb-px flex space-x-8">
+                <button
+                  onClick={() => setActiveTab('info')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'info'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Informações Gerais
+                </button>
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'history'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Histórico de Alterações
+                </button>
+                <button
+                  onClick={() => setActiveTab('comments')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'comments'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Comentários
+                </button>
+              </nav>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Título</label>
-                <p className="text-sm text-gray-900 mt-1">{selectedExpediente.titulo}</p>
-              </div>
-
-              {selectedExpediente.descricao && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Descrição</label>
-                  <p className="text-sm text-gray-900 mt-1">{selectedExpediente.descricao}</p>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Data Abertura</label>
-                  <p className="text-sm text-gray-900 mt-1">
-                    {new Date(selectedExpediente.data_abertura).toLocaleDateString('pt-PT')}
-                  </p>
-                </div>
-                {selectedExpediente.data_prazo && (
+            {/* Tab Content */}
+            {activeTab === 'info' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Data Prazo</label>
-                    <p className="text-sm text-gray-900 mt-1">
-                      {new Date(selectedExpediente.data_prazo).toLocaleDateString('pt-PT')}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700">Número</label>
+                    <p className="text-sm text-gray-900 mt-1">#{selectedExpediente.numero}</p>
                   </div>
-                )}
-                {selectedExpediente.data_fechamento && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Data Fechamento</label>
-                    <p className="text-sm text-gray-900 mt-1">
-                      {new Date(selectedExpediente.data_fechamento).toLocaleDateString('pt-PT')}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700">Tipo</label>
+                    <p className="text-sm text-gray-900 mt-1 capitalize">{selectedExpediente.tipo}</p>
                   </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Criado por</label>
-                  <p className="text-sm text-gray-900 mt-1">{selectedExpediente.criador?.nome || 'N/A'}</p>
-                </div>
-                {selectedExpediente.responsavel && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Responsável</label>
-                    <p className="text-sm text-gray-900 mt-1">{selectedExpediente.responsavel.nome}</p>
-                  </div>
-                )}
-                {selectedExpediente.departamento && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Departamento</label>
-                    <p className="text-sm text-gray-900 mt-1">{selectedExpediente.departamento.nome}</p>
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Visibilidade</label>
-                  <p className="text-sm text-gray-900 mt-1">{selectedExpediente.publico ? 'Público' : 'Privado'}</p>
-                </div>
-              </div>
-
-              {selectedExpediente.observacoes && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Observações</label>
-                  <p className="text-sm text-gray-900 mt-1">{selectedExpediente.observacoes}</p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Documentos Associados</label>
-                <div className="mt-2 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Folder className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">
-                      {selectedExpediente.total_documentos || 0} documento(s)
+                    <label className="block text-sm font-medium text-gray-700">Status</label>
+                    <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedExpediente.status)}`}>
+                      {getStatusIcon(selectedExpediente.status)}
+                      <span className="ml-1">{selectedExpediente.status.replace('_', ' ')}</span>
                     </span>
                   </div>
-                  <button
-                    onClick={() => openDocumentModal(selectedExpediente)}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Gerir Documentos
-                  </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Prioridade</label>
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(selectedExpediente.prioridade)}`}>
+                      {selectedExpediente.prioridade}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Título</label>
+                  <p className="text-sm text-gray-900 mt-1">{selectedExpediente.titulo}</p>
+                </div>
+
+                {selectedExpediente.descricao && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Descrição</label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedExpediente.descricao}</p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Data Abertura</label>
+                    <p className="text-sm text-gray-900 mt-1">
+                      {new Date(selectedExpediente.data_abertura).toLocaleDateString('pt-PT')}
+                    </p>
+                  </div>
+                  {selectedExpediente.data_prazo && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Data Prazo</label>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {new Date(selectedExpediente.data_prazo).toLocaleDateString('pt-PT')}
+                      </p>
+                    </div>
+                  )}
+                  {selectedExpediente.data_fechamento && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Data Fechamento</label>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {new Date(selectedExpediente.data_fechamento).toLocaleDateString('pt-PT')}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Criado por</label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedExpediente.criador?.nome || 'N/A'}</p>
+                  </div>
+                  {selectedExpediente.responsavel && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Responsável</label>
+                      <p className="text-sm text-gray-900 mt-1">{selectedExpediente.responsavel.nome}</p>
+                    </div>
+                  )}
+                  {selectedExpediente.departamento && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Departamento</label>
+                      <p className="text-sm text-gray-900 mt-1">{selectedExpediente.departamento.nome}</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Visibilidade</label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedExpediente.publico ? 'Público' : 'Privado'}</p>
+                  </div>
+                </div>
+
+                {selectedExpediente.observacoes && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Observações</label>
+                    <p className="text-sm text-gray-900 mt-1">{selectedExpediente.observacoes}</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Documentos Associados</label>
+                  <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Folder className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-600">
+                        {selectedExpediente.total_documentos || 0} documento(s)
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => openDocumentModal(selectedExpediente)}
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Gerir Documentos
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {activeTab === 'history' && (
+              <div className="space-y-4">
+                {expedienteHistory.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Nenhum histórico de alterações encontrado.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {expedienteHistory.map((item: any) => (
+                      <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
+                                item.tipo_alteracao === 'criacao' ? 'bg-blue-100 text-blue-800' :
+                                item.tipo_alteracao === 'edicao' ? 'bg-yellow-100 text-yellow-800' :
+                                item.tipo_alteracao === 'status' ? 'bg-purple-100 text-purple-800' :
+                                item.tipo_alteracao === 'responsavel' ? 'bg-green-100 text-green-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {item.tipo_alteracao}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                por {item.usuario.nome}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-900 mb-2">{item.descricao_alteracao}</p>
+                            {item.campo_alterado && item.valor_antigo && item.valor_novo && (
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">Campo:</span> {item.campo_alterado} | 
+                                <span className="font-medium"> De:</span> {item.valor_antigo} | 
+                                <span className="font-medium"> Para:</span> {item.valor_novo}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500 ml-4">
+                            {new Date(item.data_alteracao).toLocaleString('pt-PT')}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'comments' && (
+              <div className="space-y-4">
+                {/* Add Comment Form */}
+                {selectedExpediente && canComment(selectedExpediente) ? (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <textarea
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      placeholder="Adicionar um comentário..."
+                      className="w-full p-3 border border-gray-300 rounded-md resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={3}
+                    />
+                    <div className="flex justify-end mt-2">
+                      <button
+                        onClick={handleCreateComment}
+                        disabled={!newComment.trim()}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Comentar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  selectedExpediente?.status === 'fechado' && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <AlertCircle className="w-5 h-5 text-yellow-600 mr-2" />
+                        <p className="text-yellow-800 text-sm">
+                          Este expediente está fechado. Apenas administradores podem adicionar comentários.
+                        </p>
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {/* Comments List */}
+                {expedienteComments.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">Nenhum comentário encontrado.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {expedienteComments.map((comentario: any) => (
+                      <div key={comentario.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                              <span className="text-sm font-medium text-blue-600">
+                                {comentario.usuario.nome.charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{comentario.usuario.nome}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(comentario.created_at).toLocaleString('pt-PT')}
+                                {comentario.updated_at !== comentario.created_at && ' (editado)'}
+                              </p>
+                            </div>
+                          </div>
+                          {(userProfile?.id === comentario.usuario_id || userProfile?.role === 'admin') && 
+                           selectedExpediente && canComment(selectedExpediente) && (
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEditComment(comentario)}
+                                className="text-gray-400 hover:text-gray-600"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteComment(comentario.id)}
+                                className="text-gray-400 hover:text-red-600"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {editingComment === comentario.id ? (
+                          <div className="space-y-2">
+                            <textarea
+                              value={editCommentText}
+                              onChange={(e) => setEditCommentText(e.target.value)}
+                              className="w-full p-2 border border-gray-300 rounded-md resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              rows={3}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setEditingComment(null);
+                                  setEditCommentText('');
+                                }}
+                                className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => handleUpdateComment(comentario.id)}
+                                className="px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
+                              >
+                                Salvar
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{comentario.comentario}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end mt-6">
               <button

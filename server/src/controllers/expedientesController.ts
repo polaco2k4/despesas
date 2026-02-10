@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
+import { createHistorico } from './historicoExpedientesController.js';
 
 // Ensure tables exist
 const ensureExpedientesTable = async () => {
@@ -370,6 +371,18 @@ export const createExpediente = async (req: Request, res: Response) => {
     
     const expedienteId = results[0].id;
     
+    // Registrar histórico de criação
+    await createHistorico(
+      expedienteId,
+      userId,
+      'criacao',
+      undefined,
+      undefined,
+      undefined,
+      `Expediente "${titulo}" foi criado`,
+      req.ip
+    );
+    
     // Return created expediente
     const createdExpediente = await executeQuery(`
       SELECT 
@@ -401,23 +414,28 @@ export const updateExpediente = async (req: Request, res: Response) => {
     const userId = req.headers['x-user-id'] as string;
     const userRole = req.headers['x-user-role'] as string;
     
-    // Check if user can edit this expediente
-    const checkQuery = `
-      SELECT criado_por, responsavel_id, departamento_id 
-      FROM expedientes 
+    // Get current expediente data for comparison
+    const currentQuery = `
+      SELECT * FROM expedientes 
       WHERE id = @id AND ativo = 1
     `;
-    const checkResult = await executeQuery(checkQuery, { id });
+    const currentResult = await executeQuery(currentQuery, { id });
     
-    if (checkResult.length === 0) {
+    if (currentResult.length === 0) {
       return res.status(404).json({ error: 'Expediente não encontrado' });
     }
     
-    const expediente = checkResult[0];
+    const currentExpediente = currentResult[0];
+    
+    // Check if expediente is closed and user is not admin
+    if (currentExpediente.status === 'fechado' && userRole !== 'admin') {
+      return res.status(403).json({ error: 'Expedientes fechados só podem ser editados por administradores' });
+    }
+    
     const canEdit = userRole === 'admin' || 
-                   expediente.criado_por === userId || 
-                   expediente.responsavel_id === userId ||
-                   (userRole === 'gestor' && expediente.departamento_id === req.headers['x-user-department-id']);
+                   currentExpediente.criado_por === userId || 
+                   currentExpediente.responsavel_id === userId ||
+                   (userRole === 'gestor' && currentExpediente.departamento_id === req.headers['x-user-department-id']);
     
     if (!canEdit) {
       return res.status(403).json({ error: 'Sem permissão para editar este expediente' });
@@ -426,54 +444,175 @@ export const updateExpediente = async (req: Request, res: Response) => {
     const updateFields = [];
     const params: any = { id };
     
-    if (titulo !== undefined) {
+    // Track changes and create history entries
+    if (titulo !== undefined && currentExpediente.titulo !== titulo) {
       updateFields.push('titulo = @titulo');
       params.titulo = titulo;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'titulo',
+        currentExpediente.titulo,
+        titulo,
+        `Título alterado de "${currentExpediente.titulo}" para "${titulo}"`,
+        req.ip
+      );
     }
-    if (descricao !== undefined) {
+    
+    if (descricao !== undefined && currentExpediente.descricao !== descricao) {
       updateFields.push('descricao = @descricao');
       params.descricao = descricao;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'descricao',
+        currentExpediente.descricao || '',
+        descricao,
+        `Descrição alterada`,
+        req.ip
+      );
     }
-    if (tipo !== undefined) {
+    
+    if (tipo !== undefined && currentExpediente.tipo !== tipo) {
       updateFields.push('tipo = @tipo');
       params.tipo = tipo;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'tipo',
+        currentExpediente.tipo,
+        tipo,
+        `Tipo alterado de "${currentExpediente.tipo}" para "${tipo}"`,
+        req.ip
+      );
     }
-    if (status !== undefined) {
+    
+    if (status !== undefined && currentExpediente.status !== status) {
       updateFields.push('status = @status');
       params.status = status;
+      await createHistorico(
+        id,
+        userId,
+        'status',
+        'status',
+        currentExpediente.status,
+        status,
+        `Status alterado de "${currentExpediente.status}" para "${status}"`,
+        req.ip
+      );
       
       // Auto-set data_fechamento when status changes to 'fechado'
       if (status === 'fechado' && !data_fechamento) {
         updateFields.push('data_fechamento = GETDATE()');
       }
     }
-    if (prioridade !== undefined) {
+    
+    if (prioridade !== undefined && currentExpediente.prioridade !== prioridade) {
       updateFields.push('prioridade = @prioridade');
       params.prioridade = prioridade;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'prioridade',
+        currentExpediente.prioridade,
+        prioridade,
+        `Prioridade alterada de "${currentExpediente.prioridade}" para "${prioridade}"`,
+        req.ip
+      );
     }
-    if (data_prazo !== undefined) {
+    
+    if (data_prazo !== undefined && currentExpediente.data_prazo !== data_prazo) {
       updateFields.push('data_prazo = @data_prazo');
       params.data_prazo = data_prazo;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'data_prazo',
+        currentExpediente.data_prazo ? currentExpediente.data_prazo.toISOString() : '',
+        data_prazo || '',
+        `Data de prazo alterada`,
+        req.ip
+      );
     }
-    if (data_fechamento !== undefined) {
+    
+    if (data_fechamento !== undefined && currentExpediente.data_fechamento !== data_fechamento) {
       updateFields.push('data_fechamento = @data_fechamento');
       params.data_fechamento = data_fechamento;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'data_fechamento',
+        currentExpediente.data_fechamento ? currentExpediente.data_fechamento.toISOString() : '',
+        data_fechamento || '',
+        `Data de fechamento alterada`,
+        req.ip
+      );
     }
-    if (responsavel_id !== undefined) {
+    
+    if (responsavel_id !== undefined && currentExpediente.responsavel_id !== responsavel_id) {
       updateFields.push('responsavel_id = @responsavel_id');
       params.responsavel_id = responsavel_id;
+      await createHistorico(
+        id,
+        userId,
+        'responsavel',
+        'responsavel_id',
+        currentExpediente.responsavel_id || '',
+        responsavel_id || '',
+        `Responsável alterado`,
+        req.ip
+      );
     }
-    if (departamento_id !== undefined) {
+    
+    if (departamento_id !== undefined && currentExpediente.departamento_id !== departamento_id) {
       updateFields.push('departamento_id = @departamento_id');
       params.departamento_id = departamento_id;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'departamento_id',
+        currentExpediente.departamento_id || '',
+        departamento_id || '',
+        `Departamento alterado`,
+        req.ip
+      );
     }
-    if (observacoes !== undefined) {
+    
+    if (observacoes !== undefined && currentExpediente.observacoes !== observacoes) {
       updateFields.push('observacoes = @observacoes');
       params.observacoes = observacoes;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'observacoes',
+        currentExpediente.observacoes || '',
+        observacoes || '',
+        `Observações alteradas`,
+        req.ip
+      );
     }
-    if (publico !== undefined) {
+    
+    if (publico !== undefined && currentExpediente.publico !== publico) {
       updateFields.push('publico = @publico');
       params.publico = publico;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'publico',
+        currentExpediente.publico ? 'Público' : 'Privado',
+        publico ? 'Público' : 'Privado',
+        `Visibilidade alterada para ${publico ? 'Público' : 'Privado'}`,
+        req.ip
+      );
     }
     
     if (updateFields.length === 0) {
@@ -516,7 +655,7 @@ export const deleteExpediente = async (req: Request, res: Response) => {
     
     // Check permissions
     const checkQuery = `
-      SELECT criado_por, departamento_id 
+      SELECT criado_por, departamento_id, status 
       FROM expedientes 
       WHERE id = @id AND ativo = 1
     `;
@@ -527,6 +666,12 @@ export const deleteExpediente = async (req: Request, res: Response) => {
     }
     
     const expediente = checkResult[0];
+    
+    // Check if expediente is closed and user is not admin
+    if (expediente.status === 'fechado' && userRole !== 'admin') {
+      return res.status(403).json({ error: 'Expedientes fechados só podem ser excluídos por administradores' });
+    }
+    
     const canDelete = userRole === 'admin' || 
                      expediente.criado_por === userId ||
                      (userRole === 'gestor' && expediente.departamento_id === req.headers['x-user-department-id']);

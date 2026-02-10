@@ -540,4 +540,21 @@ export const expedientesAPI = {
   
   removeDocumento: (expedienteId: string, documentoId: string) => 
     fetchAPI(`/expedientes/${expedienteId}/documentos/${documentoId}`, { method: 'DELETE' }),
+  
+  // History
+  getHistorico: (expedienteId: string) => fetchAPI<any[]>(`/expedientes/${expedienteId}/historico`),
+  
+  // Comments
+  getComentarios: (expedienteId: string) => fetchAPI<any[]>(`/expedientes/${expedienteId}/comentarios`),
+  createComentario: (expedienteId: string, comentario: string) => fetchAPI<any>(`/expedientes/${expedienteId}/comentarios`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comentario })
+  }),
+  updateComentario: (comentarioId: string, comentario: string) => fetchAPI<any>(`/expedientes/comentarios/${comentarioId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comentario })
+  }),
+  deleteComentario: (comentarioId: string) => fetchAPI(`/expedientes/comentarios/${comentarioId}`, { method: 'DELETE' }),
 };
