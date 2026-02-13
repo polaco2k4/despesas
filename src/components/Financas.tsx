@@ -24,7 +24,7 @@ import {
   Check,
   X
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
 interface Filtros {
@@ -474,24 +474,36 @@ const FinancasContent: React.FC = () => {
   const totalPages = Math.ceil(filteredDespesas.length / itemsPerPage);
   
   // Funções de exportação
-  const exportarParaExcel = () => {
-    const dadosParaExportar = filteredDespesas.map(despesa => ({
-      'ID': despesa.id,
-      'Descrição': despesa.descricao,
-      'Valor': formatCurrency(despesa.valor).replace(/\s/g, ''), // Remover espaços
-      'Data': formatDate(despesa.created_at),
-      'Rubrica': despesa.rubrica?.nome || 'N/A',
-      'Departamento': despesa.usuario?.departamento?.nome || 'N/A',
-      'Solicitante': despesa.usuario?.nome || 'N/A'
-    }));
+  const exportarParaExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Despesas');
     
-    const worksheet = XLSX.utils.json_to_sheet(dadosParaExportar);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Despesas');
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 10 },
+      { header: 'Descrição', key: 'descricao', width: 30 },
+      { header: 'Valor', key: 'valor', width: 15 },
+      { header: 'Data', key: 'data', width: 15 },
+      { header: 'Rubrica', key: 'rubrica', width: 20 },
+      { header: 'Departamento', key: 'departamento', width: 20 },
+      { header: 'Solicitante', key: 'solicitante', width: 25 }
+    ];
     
-    // Gerar arquivo Excel
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    filteredDespesas.forEach(despesa => {
+      worksheet.addRow({
+        id: despesa.id,
+        descricao: despesa.descricao,
+        valor: formatCurrency(despesa.valor).replace(/\s/g, ''),
+        data: formatDate(despesa.created_at),
+        rubrica: despesa.rubrica?.nome || 'N/A',
+        departamento: despesa.usuario?.departamento?.nome || 'N/A',
+        solicitante: despesa.usuario?.nome || 'N/A'
+      });
+    });
+    
+    worksheet.getRow(1).font = { bold: true };
+    
+    const buffer = await workbook.xlsx.writeBuffer();
+    const data = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(data, `despesas_${new Date().toISOString().split('T')[0]}.xlsx`);
     
     setMessage({ text: 'Exportação para Excel concluída!', type: 'success' });

@@ -4,29 +4,16 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const config: sql.config = {
-  server: process.env.SQL_SERVER || 'localhost\\SQLEXPRESS',
+  server: process.env.SQL_SERVER || 'localhost',
   database: process.env.SQL_DATABASE || 'DESPESAS',
-  authentication: process.env.SQL_TRUSTED_CONNECTION === 'true' 
-    ? {
-        type: 'ntlm',
-        options: {
-          domain: process.env.SQL_DOMAIN || '',
-          userName: process.env.SQL_USER || '',
-          password: process.env.SQL_PASSWORD || '',
-        }
-      }
-    : {
-        type: 'default',
-        options: {
-          userName: process.env.SQL_USER || '',
-          password: process.env.SQL_PASSWORD || '',
-        }
-      },
+  user: process.env.SQL_USER || 'despesas_user',
+  password: process.env.SQL_PASSWORD || 'Despesas@2024',
   options: {
     encrypt: process.env.SQL_ENCRYPT === 'true',
     trustServerCertificate: process.env.SQL_TRUST_SERVER_CERTIFICATE === 'true',
     enableArithAbort: true,
     useUTC: false,
+    instanceName: process.env.SQL_INSTANCE || 'SQLEXPRESS',
   },
   pool: {
     max: 10,
