@@ -19,11 +19,15 @@ export const login = async (req: Request, res: Response) => {
     if (adUser) {
       console.log('🔐 AD Authentication successful for:', email);
       
-      // Busca ou cria usuário no banco local
-      let localUser = await findOrCreateLocalUser(adUser);
+      // Verifica se usuário existe no banco local (NÃO cria automaticamente)
+      let localUser = await findLocalUser(adUser.email);
       
       if (localUser) {
+        console.log('✅ User found in local database:', email);
         return res.json({ user: localUser });
+      } else {
+        console.log('❌ AD user not authorized - not found in local database:', email);
+        return res.status(401).json({ error: 'Usuário não autorizado no sistema' });
       }
     }
 
@@ -82,12 +86,11 @@ export const login = async (req: Request, res: Response) => {
 };
 
 /**
- * Busca ou cria usuário local baseado nos dados do AD
+ * Busca usuário local por email (sem criar automaticamente)
  */
-async function findOrCreateLocalUser(adUser: any): Promise<any> {
+async function findLocalUser(email: string): Promise<any> {
   try {
-    // Busca usuário existente
-    const existingUserQuery = `
+    const userQuery = `
       SELECT 
         u.id, u.nome, u.email, u.role, u.departamento_id,
         u.created_at, u.updated_at,
@@ -99,54 +102,16 @@ async function findOrCreateLocalUser(adUser: any): Promise<any> {
       WHERE u.email = @email
     `;
     
-    const existingResults = await executeQuery(existingUserQuery, { email: adUser.email });
+    const results = await executeQuery(userQuery, { email });
     
-    if (existingResults.length > 0) {
-      // Usuário já existe, atualiza informações se necessário
-      const row = existingResults[0];
-      
-      if (row.nome !== adUser.displayName) {
-        await executeQuery(
-          'UPDATE usuarios SET nome = @nome, updated_at = GETDATE() WHERE id = @id',
-          { nome: adUser.displayName, id: row.id }
-        );
-        row.nome = adUser.displayName;
-      }
-      
+    if (results.length > 0) {
+      const row = results[0];
       return await buildUserWithDepartments(row);
-    } else {
-      // Cria novo usuário
-      console.log('🆕 Creating new user from AD:', adUser.email);
-      
-      // Busca departamento padrão (primeiro disponível)
-      const defaultDeptQuery = 'SELECT TOP 1 id FROM departamentos ORDER BY nome';
-      const deptResults = await executeQuery(defaultDeptQuery, {});
-      const defaultDeptId = deptResults.length > 0 ? deptResults[0].id : null;
-      
-      const insertQuery = `
-        INSERT INTO usuarios (nome, email, role, departamento_id, password_hash, created_at, updated_at)
-        OUTPUT INSERTED.id, INSERTED.nome, INSERTED.email, INSERTED.role, 
-               INSERTED.departamento_id, INSERTED.created_at, INSERTED.updated_at
-        VALUES (@nome, @email, @role, @departamento_id, @password_hash, GETDATE(), GETDATE())
-      `;
-      
-      const insertResults = await executeQuery(insertQuery, {
-        nome: adUser.displayName,
-        email: adUser.email,
-        role: 'colaborador', // Role padrão para usuários AD
-        departamento_id: defaultDeptId,
-        password_hash: '' // Usuários AD não precisam de senha local
-      });
-      
-      if (insertResults.length > 0) {
-        const newUser = insertResults[0];
-        return await buildUserWithDepartments(newUser);
-      }
     }
     
     return null;
   } catch (error) {
-    console.error('Error finding/creating local user:', error);
+    console.error('Error finding local user:', error);
     return null;
   }
 }

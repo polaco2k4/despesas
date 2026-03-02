@@ -5,20 +5,19 @@
 ### ✅ Usuários do Active Directory (AD)
 
 **Autenticação**: Credenciais validadas pelo Active Directory
-**Criação**: **AUTOMÁTICA** no primeiro login bem-sucedido
+**Criação**: **MANUAL** - devem ser pré-cadastrados na tabela `usuarios`
 **Senha no banco**: Não necessária (campo `password_hash` vazio)
-**Role padrão**: `colaborador`
-**Departamento padrão**: Primeiro departamento disponível
+**Role**: Definida manualmente no cadastro
+**Departamento**: Definido manualmente no cadastro
 
 **Fluxo:**
 1. Usuário faz login com credenciais do AD
 2. Sistema valida no Active Directory
 3. Se autenticação AD bem-sucedida:
    - Busca usuário na tabela `usuarios` por email
-   - Se **não existir**: Cria automaticamente com role `colaborador`
-   - Se **existir**: Atualiza nome se necessário
-4. Login concedido
-5. **Importante**: Usuários AD são criados automaticamente e não podem fazer login local
+   - Se **não existir**: Login negado - "Usuário não autorizado no sistema"
+   - Se **existir**: Login concedido
+4. **Importante**: Usuários do AD só podem fazer login se já estiverem cadastrados
 
 ### ✅ Usuários Locais (SQL Server)
 
@@ -42,9 +41,9 @@
 Login Request
     ↓
 1. Tenta AD primeiro
-    ├─ ✅ Sucesso no AD → Busca/Cria usuário no banco
+    ├─ ✅ Sucesso no AD → Verifica se existe no banco
     │   ├─ ✅ Existe → Login OK
-    │   └─ ❌ Não existe → Cria automaticamente → Login OK
+    │   └─ ❌ Não existe → Login NEGADO (não autorizado)
     └─ ❌ Falha no AD → Continua
          ↓
 2. Tenta Local
