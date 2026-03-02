@@ -15,6 +15,7 @@ import Usuarios from './components/Usuarios';
 import Departamentos from './components/Departamentos';
 import Documentos from './components/Documentos';
 import Expedientes from './components/Expedientes';
+import Frotas from './components/Frotas';
 
 const PrivateRoute: React.FC<{ element: React.ReactNode }> = ({ element }) => {
   const { userProfile, loading } = useAuth();
@@ -98,6 +99,12 @@ const AppContent: React.FC = () => {
         path="/expedientes"
         element={
           <PrivateRoute element={<Expedientes />} />
+        }
+      />
+      <Route
+        path="/frotas"
+        element={
+          <PrivateRoute element={<Frotas />} />
         }
       />
       <Route

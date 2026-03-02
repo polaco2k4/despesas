@@ -17,7 +17,8 @@ import {
   Truck,
   DollarSign,
   FolderOpen,
-  Folder
+  Folder,
+  Car
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -39,14 +40,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
     { id: 'departamentos', label: 'Departamentos', icon: Building2, roles: ['admin'] },
-    { id: 'usuarios', label: 'Utilizadores', icon: Users, roles: ['admin'] },
     { id: 'orcamentos', label: 'Orçamentos', icon: PiggyBank, roles: ['admin', 'gestor', 'adm_area'] },
     { id: 'despesas', label: 'Despesas', icon: Receipt, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
-    { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
-    { id: 'fornecedores', label: 'Fornecedores', icon: Truck, roles: ['admin', 'gestor'] },
     { id: 'documentos', label: 'Documentos', icon: FolderOpen, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
     { id: 'expedientes', label: 'Expedientes', icon: Folder, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
+    { id: 'fornecedores', label: 'Fornecedores', icon: Truck, roles: ['admin', 'gestor'] },
+    { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
+    { id: 'frotas', label: 'Gestão de Frotas', icon: Car, roles: ['admin', 'gestor'] },
     { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor', 'adm_area'] },
+    { id: 'usuarios', label: 'Utilizadores', icon: Users, roles: ['admin'] },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
   ];
 
@@ -198,7 +200,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Logo para desktop - alinhado à esquerda */}
             <div className="hidden lg:flex items-center ml-4">
               <h1 className="text-2xl font-bold text-gray-900">
-                Sistema de Gestão Orçamental e Despesas
+                Sistema de Gestão Corporativa
               </h1>
             </div>
             
