@@ -154,10 +154,31 @@ const Usuarios: React.FC = () => {
     if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
       try {
         await usuariosAPI.delete(id);
+        alert('Usuário excluído com sucesso!');
         await fetchData();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting usuario:', error);
-        alert('Erro ao excluir usuário');
+        
+        // Display detailed error message from backend
+        if (error.details) {
+          // Show detailed message with dependencies info
+          let message = `${error.message}\n\n${error.details}`;
+          
+          if (error.dependencies) {
+            message += `\n\nDetalhes:`;
+            if (error.dependencies.despesas > 0) {
+              message += `\n• ${error.dependencies.despesas} despesa(s)`;
+            }
+            if (error.dependencies.aprovacoes > 0) {
+              message += `\n• ${error.dependencies.aprovacoes} aprovação(ões)`;
+            }
+          }
+          
+          alert(message);
+        } else {
+          // Fallback to simple error message
+          alert(error.message || 'Erro ao excluir usuário');
+        }
       }
     }
   };

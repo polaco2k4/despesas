@@ -52,7 +52,19 @@ export const login = async (req: Request, res: Response) => {
     const row = results[0];
     
     // Validação de senha local
-    if (row.password_hash !== password) {
+    // Se password_hash estiver vazio, é usuário AD que não pode fazer login local
+    if (!row.password_hash || row.password_hash === '') {
+      console.log('User has no local password (AD user):', email);
+      return res.status(401).json({ error: 'Email ou senha inválidos' });
+    }
+    
+    // Compara senha fornecida com a armazenada
+    // Nota: Em produção, usar bcrypt.compare() para senhas hasheadas
+    const storedPassword = typeof row.password_hash === 'string' 
+      ? row.password_hash 
+      : row.password_hash.toString();
+    
+    if (storedPassword !== password) {
       console.log('Invalid local password for:', email);
       return res.status(401).json({ error: 'Email ou senha inválidos' });
     }
@@ -198,7 +210,7 @@ async function buildUserWithDepartments(row: any): Promise<any> {
   }
 }
 
-export const getCurrentUser = async (req: Request, res: Response) => {
+export const getCurrentUser = async (_req: Request, res: Response) => {
   try {
     // Por enquanto, retornar null - implementar sessões depois
     res.json({ user: null });

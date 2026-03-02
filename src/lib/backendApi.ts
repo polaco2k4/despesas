@@ -44,7 +44,22 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
       url: `${API_BASE_URL}${endpoint}`,
       errorBody: errorText
     });
-    throw new Error(`API Error: ${response.statusText} - ${errorText}`);
+    
+    // Try to parse error as JSON to get structured error messages
+    let errorData;
+    try {
+      errorData = JSON.parse(errorText);
+    } catch (parseError) {
+      // If not JSON, throw simple error
+      throw new Error(`API Error: ${response.statusText} - ${errorText}`);
+    }
+    
+    // Create structured error with details
+    const error: any = new Error(errorData.error || response.statusText);
+    error.details = errorData.details;
+    error.dependencies = errorData.dependencies;
+    error.status = response.status;
+    throw error;
   }
 
   // Handle 204 No Content responses

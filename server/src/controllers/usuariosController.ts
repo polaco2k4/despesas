@@ -213,13 +213,57 @@ export const deleteUsuario = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const query = `DELETE FROM usuarios WHERE id = @id`;
-    await executeQuery(query, { id });
+    // Verificar se usuário existe
+    const checkUserQuery = `SELECT id, nome FROM usuarios WHERE id = @id`;
+    const userResults = await executeQuery(checkUserQuery, { id });
     
+    if (userResults.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Verificar dependências - despesas criadas pelo usuário
+    const checkDespesasQuery = `SELECT COUNT(*) as count FROM despesas WHERE usuario_id = @id`;
+    const despesasResults = await executeQuery(checkDespesasQuery, { id });
+    const despesasCount = despesasResults[0].count;
+
+    // Verificar dependências - aprovações feitas pelo usuário
+    const checkAprovacoesQuery = `SELECT COUNT(*) as count FROM aprovacoes WHERE aprovado_por = @id`;
+    const aprovacoesResults = await executeQuery(checkAprovacoesQuery, { id });
+    const aprovacoesCount = aprovacoesResults[0].count;
+
+    // Se houver dependências, retornar erro informativo
+    if (despesasCount > 0 || aprovacoesCount > 0) {
+      const dependencies = [];
+      if (despesasCount > 0) dependencies.push(`${despesasCount} despesa(s)`);
+      if (aprovacoesCount > 0) dependencies.push(`${aprovacoesCount} aprovação(ões)`);
+      
+      return res.status(400).json({ 
+        error: 'Não é possível deletar este usuário',
+        details: `O usuário possui ${dependencies.join(' e ')} associadas. Para deletar, primeiro remova ou transfira essas dependências.`,
+        dependencies: {
+          despesas: despesasCount,
+          aprovacoes: aprovacoesCount
+        }
+      });
+    }
+
+    // Deletar relacionamentos em usuarios_departamentos se existirem
+    const deleteUserDeptsQuery = `DELETE FROM usuarios_departamentos WHERE usuario_id = @id`;
+    await executeQuery(deleteUserDeptsQuery, { id });
+
+    // Deletar notificações do usuário se existirem
+    const deleteNotificationsQuery = `DELETE FROM notificacoes WHERE usuario_id = @id`;
+    await executeQuery(deleteNotificationsQuery, { id });
+
+    // Agora pode deletar o usuário
+    const deleteQuery = `DELETE FROM usuarios WHERE id = @id`;
+    await executeQuery(deleteQuery, { id });
+    
+    console.log(`✅ Usuário ${userResults[0].nome} (${id}) deletado com sucesso`);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting usuario:', error);
-    res.status(500).json({ error: 'Erro ao deletar usuário' });
+    res.status(500).json({ error: 'Erro ao deletar usuário', details: error instanceof Error ? error.message : 'Erro desconhecido' });
   }
 };
 
