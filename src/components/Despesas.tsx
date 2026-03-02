@@ -657,7 +657,7 @@ const Despesas: React.FC = () => {
                 currentDespesas.map((despesa) => (
                   <tr key={despesa.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                      {despesa.id}
+                      {despesa.numero_despesa || despesa.id}
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm font-medium text-gray-900">
@@ -936,7 +936,9 @@ const Despesas: React.FC = () => {
                 <h2 className="text-xl font-bold text-gray-900">
                   {isEditing ? 'Editar Despesa' : 'Detalhes da Despesa'}
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">Nº Documento: {selectedDespesa.id}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Nº Documento: {selectedDespesa.numero_despesa || selectedDespesa.id}
+                </p>
               </div>
               <button
                 onClick={() => {
@@ -1111,6 +1113,13 @@ const Despesas: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700">Descrição</label>
                   <p className="text-gray-900">{selectedDespesa.descricao}</p>
                 </div>
+
+                {selectedDespesa.numero_despesa && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Número da Despesa</label>
+                    <p className="text-blue-600 font-semibold">{selectedDespesa.numero_despesa}</p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

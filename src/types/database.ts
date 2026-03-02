@@ -58,6 +58,7 @@ export interface Despesa {
   motivo_rejeicao?: string | null;
   fornecedor_id?: string | null;
   pago_por?: string | null;
+  numero_despesa?: string;
   created_at: string;
   updated_at: string;
   rubrica?: Rubrica;
@@ -111,6 +112,7 @@ export interface Documento {
   documento_pai_id?: string;
   created_at: string;
   updated_at: string;
+  numero_documento?: string;
   criador?: Usuario;
   departamento?: Departamento;
   documento_pai?: Documento;
@@ -143,6 +145,7 @@ export interface DocumentoUpload {
 export interface Expediente {
   id: string;
   numero: string;
+  numero_expediente?: string;
   titulo: string;
   descricao?: string;
   tipo: 'administrativo' | 'juridico' | 'financeiro' | 'rh' | 'outros';

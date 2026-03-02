@@ -503,8 +503,13 @@ const Documentos: React.FC = () => {
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">{documento.nome}</div>
+                      {documento.numero_documento && (
+                        <div className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-md inline-block mt-1">
+                          {documento.numero_documento}
+                        </div>
+                      )}
                       {documento.descricao && (
-                        <div className="text-sm text-gray-500">{documento.descricao}</div>
+                        <div className="text-sm text-gray-500 mt-1">{documento.descricao}</div>
                       )}
                       <div className="flex items-center mt-1">
                         {documento.publico ? (
@@ -859,6 +864,13 @@ const Documentos: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700">Nome</label>
                         <p className="text-sm text-gray-900">{selectedDocument.nome}</p>
                       </div>
+                      
+                      {selectedDocument.numero_documento && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Número do Documento</label>
+                          <p className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-md inline-block">{selectedDocument.numero_documento}</p>
+                        </div>
+                      )}
                       
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Nome Original</label>

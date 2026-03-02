@@ -29,6 +29,69 @@ export const upload = multer({
   }
 });
 
+// Generate document number in format xxxx/sigla/yyyy
+const generateDocumentNumber = async (departamentoId?: string) => {
+  try {
+    const year = new Date().getFullYear();
+    
+    let deptSigla = 'GER';
+    if (departamentoId) {
+      const deptQuery = `
+        SELECT sigla FROM departamentos 
+        WHERE id = @departamentoId
+      `;
+      const deptResult = await executeQuery(deptQuery, { departamentoId });
+      deptSigla = deptResult[0]?.sigla || 'GER';
+    }
+    
+    // Check if sequence exists for this department and year
+    const sequenceQuery = `
+      SELECT proximo_numero 
+      FROM documento_sequencia 
+      WHERE departamento_id = @departamentoId AND ano = @year
+    `;
+    
+    let nextNumber = 1;
+    const sequenceResult = await executeQuery(sequenceQuery, { 
+      departamentoId: departamentoId || null, 
+      year 
+    });
+    
+    if (sequenceResult.length > 0) {
+      nextNumber = sequenceResult[0].proximo_numero;
+      
+      // Update sequence
+      const updateQuery = `
+        UPDATE documento_sequencia 
+        SET proximo_numero = proximo_numero + 1, updated_at = GETDATE()
+        WHERE departamento_id = @departamentoId AND ano = @year
+      `;
+      await executeQuery(updateQuery, { 
+        departamentoId: departamentoId || null, 
+        year 
+      });
+    } else {
+      // Create new sequence
+      const insertQuery = `
+        INSERT INTO documento_sequencia (departamento_id, ano, proximo_numero)
+        VALUES (@departamentoId, @year, 2)
+      `;
+      await executeQuery(insertQuery, { 
+        departamentoId: departamentoId || null, 
+        year 
+      });
+    }
+    
+    // Format: xxxx/sigla/yyyy
+    const sequentialNumber = nextNumber.toString().padStart(4, '0');
+    return `${sequentialNumber}/${deptSigla}/${year}`;
+  } catch (error) {
+    console.error('Erro ao gerar número do documento:', error);
+    // Fallback to timestamp-based number
+    return `${Date.now().toString().substring(0, 4)}/GER/${new Date().getFullYear()}`;
+  }
+};
+
 export const getAllDocumentos = async (req: Request, res: Response) => {
   try {
     const { categoria, departamento_id, criado_por, publico, ativo = '1' } = req.query;
@@ -119,7 +182,7 @@ export const getAllDocumentos = async (req: Request, res: Response) => {
         d.id, d.nome, d.nome_original, d.descricao, d.tipo_arquivo, d.tamanho,
         d.caminho_arquivo, d.url_acesso, d.categoria, d.tags, d.criado_por,
         d.departamento_id, d.publico, d.ativo, d.versao, d.documento_pai_id,
-        d.created_at, d.updated_at,
+        d.created_at, d.updated_at, d.numero_documento,
         u.id as 'criador.id', u.nome as 'criador.nome', u.email as 'criador.email',
         u.role as 'criador.role',
         dep.id as 'departamento.id', dep.nome as 'departamento.nome',
@@ -152,6 +215,7 @@ export const getAllDocumentos = async (req: Request, res: Response) => {
       documento_pai_id: row.documento_pai_id,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      numero_documento: row.numero_documento,
       criador: row['criador.id'] ? {
         id: row['criador.id'],
         nome: row['criador.nome'],
@@ -253,6 +317,9 @@ export const createDocumento = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Usuário criador é obrigatório' });
     }
     
+    // Generate document number
+    const numeroDocumento = await generateDocumentNumber(departamento_id);
+    
     const documentoNome = nome || file.originalname;
     const caminhoArquivo = file.path;
     const urlAcesso = `/api/documentos/${file.filename}/download`;
@@ -260,12 +327,12 @@ export const createDocumento = async (req: Request, res: Response) => {
     const query = `
       INSERT INTO documentos (
         nome, nome_original, descricao, tipo_arquivo, tamanho, caminho_arquivo,
-        url_acesso, categoria, tags, criado_por, departamento_id, publico
+        url_acesso, categoria, tags, criado_por, departamento_id, publico, numero_documento
       )
       OUTPUT INSERTED.id
       VALUES (
         @nome, @nome_original, @descricao, @tipo_arquivo, @tamanho, @caminho_arquivo,
-        @url_acesso, @categoria, @tags, @criado_por, @departamento_id, @publico
+        @url_acesso, @categoria, @tags, @criado_por, @departamento_id, @publico, @numero_documento
       )
     `;
     
@@ -281,7 +348,8 @@ export const createDocumento = async (req: Request, res: Response) => {
       tags: tags || null,
       criado_por,
       departamento_id: departamento_id || null,
-      publico: publico === 'true' || publico === true
+      publico: publico === 'true' || publico === true,
+      numero_documento: numeroDocumento
     });
     
     const documento = await getDocumentoByIdInternal(result[0].id);
@@ -294,7 +362,7 @@ export const createDocumento = async (req: Request, res: Response) => {
       undefined,
       undefined,
       undefined,
-      `Documento "${documentoNome}" foi criado`,
+      `Documento "${documentoNome}" foi criado com número ${numeroDocumento}`,
       req.ip
     );
     
@@ -603,7 +671,7 @@ async function getDocumentoByIdInternal(id: string) {
       d.id, d.nome, d.nome_original, d.descricao, d.tipo_arquivo, d.tamanho,
       d.caminho_arquivo, d.url_acesso, d.categoria, d.tags, d.criado_por,
       d.departamento_id, d.publico, d.ativo, d.versao, d.documento_pai_id,
-      d.created_at, d.updated_at,
+      d.created_at, d.updated_at, d.numero_documento,
       u.id as 'criador.id', u.nome as 'criador.nome', u.email as 'criador.email',
       u.role as 'criador.role',
       dep.id as 'departamento.id', dep.nome as 'departamento.nome',
@@ -641,6 +709,7 @@ async function getDocumentoByIdInternal(id: string) {
     documento_pai_id: row.documento_pai_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    numero_documento: row.numero_documento,
     criador: row['criador.id'] ? {
       id: row['criador.id'],
       nome: row['criador.nome'],

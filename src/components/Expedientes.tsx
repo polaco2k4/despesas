@@ -764,8 +764,8 @@ const Expedientes: React.FC = () => {
                           <div className="text-sm font-medium text-gray-900">
                             {expediente.titulo}
                           </div>
-                          <div className="text-sm text-gray-500">
-                            #{expediente.numero}
+                          <div className="text-sm font-medium text-blue-600">
+                            {expediente.numero_expediente || `#${expediente.numero}`}
                           </div>
                           <div className="text-xs text-gray-400">
                             {new Date(expediente.data_abertura).toLocaleDateString()}
@@ -1372,7 +1372,7 @@ const Expedientes: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Número</label>
-                    <p className="text-sm text-gray-900 mt-1">#{selectedExpediente.numero}</p>
+                    <p className="text-sm font-semibold text-blue-600 mt-1">{selectedExpediente.numero_expediente || `#${selectedExpediente.numero}`}</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Tipo</label>

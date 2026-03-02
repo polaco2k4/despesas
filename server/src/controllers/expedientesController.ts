@@ -13,32 +13,64 @@ const ensureExpedientesTable = async () => {
   }
 };
 
-// Generate expediente number
-const generateExpedienteNumber = async (tipo: string, departamentoId?: string) => {
+// Generate expediente number in format xxxx/EXP/sigla/yyyy
+const generateExpedienteNumber = async (departamentoId?: string) => {
   try {
     const year = new Date().getFullYear();
-    const tipoPrefix = tipo.substring(0, 3).toUpperCase();
-    const deptQuery = departamentoId ? 
-      `SELECT sigla FROM departamentos WHERE id = @departamentoId` : null;
     
-    let deptPrefix = '';
-    if (deptQuery) {
+    let deptSigla = 'GER';
+    if (departamentoId) {
+      const deptQuery = `
+        SELECT sigla FROM departamentos WHERE id = @departamentoId
+      `;
       const deptResult = await executeQuery(deptQuery, { departamentoId });
-      deptPrefix = deptResult[0]?.sigla || 'GER';
-    } else {
-      deptPrefix = 'GER';
+      if (deptResult.length > 0 && deptResult[0].sigla) {
+        deptSigla = deptResult[0].sigla;
+      }
     }
     
-    // Get next sequential number for this year and type
-    const countQuery = `
-      SELECT COUNT(*) as count 
-      FROM expedientes 
-      WHERE YEAR(created_at) = @year AND tipo = @tipo
+    // Get or create sequence for this department/year
+    const sequenceQuery = `
+      SELECT proximo_numero 
+      FROM expediente_sequencia 
+      WHERE departamento_id = @departamentoId AND ano = @year
     `;
-    const countResult = await executeQuery(countQuery, { year, tipo });
-    const nextNumber = (countResult[0]?.count || 0) + 1;
     
-    return `${tipoPrefix}${year}${deptPrefix}${nextNumber.toString().padStart(4, '0')}`;
+    let nextNumber = 1;
+    const sequenceResult = await executeQuery(sequenceQuery, { 
+      departamentoId: departamentoId || null, 
+      year 
+    });
+    
+    if (sequenceResult.length > 0) {
+      nextNumber = sequenceResult[0].proximo_numero;
+      
+      // Update sequence
+      const updateQuery = `
+        UPDATE expediente_sequencia 
+        SET proximo_numero = proximo_numero + 1, updated_at = GETDATE()
+        WHERE departamento_id = @departamentoId AND ano = @year
+      `;
+      await executeQuery(updateQuery, { 
+        departamentoId: departamentoId || null, 
+        year 
+      });
+    } else {
+      // Create new sequence
+      const insertQuery = `
+        INSERT INTO expediente_sequencia (departamento_id, ano, proximo_numero)
+        VALUES (@departamentoId, @year, 2)
+      `;
+      await executeQuery(insertQuery, { 
+        departamentoId: departamentoId || null, 
+        year 
+      });
+    }
+    
+    // Generate number in format xxxx/EXP/sigla/yyyy
+    const sequentialNumber = nextNumber.toString().padStart(4, '0');
+    return `${sequentialNumber}/EXP/${deptSigla}/${year}`;
+    
   } catch (error) {
     console.error('Erro ao gerar número do expediente:', error);
     return `EXP${Date.now()}`;
@@ -148,7 +180,7 @@ export const getAllExpedientes = async (req: Request, res: Response) => {
 
     const query = `
       SELECT 
-        e.id, e.numero, e.titulo, e.descricao, e.tipo, e.status, e.prioridade,
+        e.id, e.numero, e.numero_expediente, e.titulo, e.descricao, e.tipo, e.status, e.prioridade,
         e.data_abertura, e.data_prazo, e.data_fechamento, e.criado_por,
         e.responsavel_id, e.departamento_id, e.observacoes, e.publico, e.ativo,
         e.created_at, e.updated_at,
@@ -171,6 +203,7 @@ export const getAllExpedientes = async (req: Request, res: Response) => {
     const expedientes = results.map((row: any) => ({
       id: row.id,
       numero: row.numero,
+      numero_expediente: row.numero_expediente,
       titulo: row.titulo,
       descricao: row.descricao,
       tipo: row.tipo,
@@ -341,22 +374,31 @@ export const createExpediente = async (req: Request, res: Response) => {
     }
     
     // Generate expediente number
-    const numero = await generateExpedienteNumber(tipo, departamento_id);
+    const numero_expediente = await generateExpedienteNumber(departamento_id);
     
     const query = `
       INSERT INTO expedientes (
-        numero, titulo, descricao, tipo, prioridade, data_prazo,
+        numero, numero_expediente, titulo, descricao, tipo, prioridade, data_prazo,
         criado_por, responsavel_id, departamento_id, observacoes, publico
       )
       OUTPUT INSERTED.id
       VALUES (
-        @numero, @titulo, @descricao, @tipo, @prioridade, @data_prazo,
+        @numero, @numero_expediente, @titulo, @descricao, @tipo, @prioridade, @data_prazo,
         @criado_por, @responsavel_id, @departamento_id, @observacoes, @publico
       )
     `;
     
+    // Generate old format numero for backward compatibility
+    const year = new Date().getFullYear();
+    const tipoPrefix = tipo.substring(0, 3).toUpperCase();
+    const countQuery = `SELECT COUNT(*) as count FROM expedientes WHERE YEAR(created_at) = @year AND tipo = @tipo`;
+    const countResult = await executeQuery(countQuery, { year, tipo });
+    const nextNumber = (countResult[0]?.count || 0) + 1;
+    const numero = `${tipoPrefix}${year}${nextNumber.toString().padStart(4, '0')}`;
+    
     const results = await executeQuery(query, {
       numero,
+      numero_expediente,
       titulo,
       descricao: descricao || null,
       tipo,

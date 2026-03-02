@@ -3,6 +3,70 @@ import { executeQuery } from '../config/database.js';
 import type { Despesa, DespesaStatus } from '../types/database.js';
 import { criarNotificacao } from './notificacoesController.js';
 
+// Generate despesa number in format xxxx/desp/sigla/yyyy
+const generateDespesaNumber = async (departamentoId?: string) => {
+  try {
+    const year = new Date().getFullYear();
+    
+    let deptSigla = 'GER';
+    if (departamentoId) {
+      const deptQuery = `
+        SELECT sigla FROM departamentos WHERE id = @departamentoId
+      `;
+      const deptResult = await executeQuery(deptQuery, { departamentoId });
+      if (deptResult.length > 0 && deptResult[0].sigla) {
+        deptSigla = deptResult[0].sigla;
+      }
+    }
+    
+    // Get or create sequence for this department/year
+    const sequenceQuery = `
+      SELECT proximo_numero 
+      FROM despesa_sequencia 
+      WHERE departamento_id = @departamentoId AND ano = @year
+    `;
+    
+    let nextNumber = 1;
+    const sequenceResult = await executeQuery(sequenceQuery, { 
+      departamentoId: departamentoId || null, 
+      year 
+    });
+    
+    if (sequenceResult.length > 0) {
+      nextNumber = sequenceResult[0].proximo_numero;
+      
+      // Update sequence
+      const updateQuery = `
+        UPDATE despesa_sequencia 
+        SET proximo_numero = proximo_numero + 1, updated_at = GETDATE()
+        WHERE departamento_id = @departamentoId AND ano = @year
+      `;
+      await executeQuery(updateQuery, { 
+        departamentoId: departamentoId || null, 
+        year 
+      });
+    } else {
+      // Create new sequence
+      const insertQuery = `
+        INSERT INTO despesa_sequencia (departamento_id, ano, proximo_numero)
+        VALUES (@departamentoId, @year, 2)
+      `;
+      await executeQuery(insertQuery, { 
+        departamentoId: departamentoId || null, 
+        year 
+      });
+    }
+    
+    // Generate number in format xxxx/DESP/sigla/yyyy
+    const sequentialNumber = nextNumber.toString().padStart(4, '0');
+    return `${sequentialNumber}/DESP/${deptSigla}/${year}`;
+    
+  } catch (error) {
+    console.error('Erro ao gerar número da despesa:', error);
+    return `DESP${Date.now()}`;
+  }
+};
+
 export const getAllDespesas = async (req: Request, res: Response) => {
   console.log('🚀 getAllDespesas called!');
   try {
@@ -128,7 +192,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
       SELECT 
         d.id, d.rubrica_id, d.usuario_id, d.descricao, d.valor, d.status,
         d.anexo_url, d.data_pagamento, d.motivo_rejeicao, d.fornecedor_id, d.pago_por,
-        d.created_at, d.updated_at,
+        d.created_at, d.updated_at, d.numero_despesa,
         r.id as rubrica_id_nested,
         r.nome as rubrica_nome,
         r.descricao as rubrica_descricao,
@@ -216,6 +280,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         pago_por: row.pago_por,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        numero_despesa: row.numero_despesa,
         rubrica: row.rubrica_id_nested ? {
           id: row.rubrica_id_nested,
           nome: row.rubrica_nome,
@@ -262,7 +327,7 @@ export const getDespesaById = async (req: Request, res: Response) => {
       SELECT 
         d.id, d.rubrica_id, d.usuario_id, d.descricao, d.valor, d.status,
         d.anexo_url, d.data_pagamento, d.motivo_rejeicao, d.fornecedor_id,
-        d.created_at, d.updated_at
+        d.created_at, d.updated_at, d.numero_despesa
       FROM despesas d
       WHERE d.id = @id
     `;
@@ -297,10 +362,23 @@ export const createDespesa = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Rubrica, usuário, descrição e valor são obrigatórios' });
     }
 
+    // Get department from rubrica
+    const rubricaDeptQuery = `
+      SELECT o.departamento_id
+      FROM rubricas r
+      LEFT JOIN orcamentos o ON r.orcamento_id = o.id
+      WHERE r.id = @rubrica_id
+    `;
+    const rubricaDeptResult = await executeQuery(rubricaDeptQuery, { rubrica_id });
+    const departamentoId = rubricaDeptResult.length > 0 ? rubricaDeptResult[0].departamento_id : null;
+    
+    // Generate despesa number
+    const numeroDespesa = await generateDespesaNumber(departamentoId);
+
     const query = `
-      INSERT INTO despesas (rubrica_id, usuario_id, descricao, valor, status, anexo_url, fornecedor_id)
+      INSERT INTO despesas (rubrica_id, usuario_id, descricao, valor, status, anexo_url, fornecedor_id, numero_despesa)
       OUTPUT INSERTED.*
-      VALUES (@rubrica_id, @usuario_id, @descricao, @valor, 'pendente_gestor', @anexo_url, @fornecedor_id)
+      VALUES (@rubrica_id, @usuario_id, @descricao, @valor, 'pendente_gestor', @anexo_url, @fornecedor_id, @numero_despesa)
     `;
     
     console.log('Executing query:', query);
@@ -311,7 +389,8 @@ export const createDespesa = async (req: Request, res: Response) => {
       descricao,
       valor,
       anexo_url,
-      fornecedor_id
+      fornecedor_id,
+      numero_despesa: numeroDespesa
     });
     
     console.log('Despesa created successfully:', result[0]);
