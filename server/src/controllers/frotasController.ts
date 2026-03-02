@@ -611,9 +611,15 @@ export const getAllSolicitacoes = async (req: Request, res: Response) => {
     const query = `
       SELECT 
         s.*,
-        u.nome as solicitante_nome
+        u.nome as solicitante_nome,
+        v.matricula as veiculo_matricula,
+        v.marca as veiculo_marca,
+        v.modelo as veiculo_modelo,
+        c.nome as condutor_nome
       FROM solicitacoes_viatura s
       LEFT JOIN usuarios u ON s.solicitante_id = u.id
+      LEFT JOIN veiculos v ON s.veiculo_atribuido_id = v.id
+      LEFT JOIN usuarios c ON s.condutor_atribuido_id = c.id
       ORDER BY s.created_at DESC
     `;
     const results = await executeQuery(query);
@@ -671,7 +677,7 @@ export const updateSolicitacao = async (req: Request, res: Response) => {
     
     const allowedFields = [
       'destino', 'data_inicio', 'data_fim', 'numero_passageiros',
-      'tipo_viatura', 'motivo', 'observacoes', 'status', 'veiculo_atribuido_id'
+      'tipo_viatura', 'motivo', 'observacoes', 'status', 'veiculo_atribuido_id', 'condutor_atribuido_id'
     ];
     
     allowedFields.forEach(field => {
@@ -682,7 +688,7 @@ export const updateSolicitacao = async (req: Request, res: Response) => {
           params[field] = updates[field] ? new Date(updates[field]) : null;
         } else if (field === 'numero_passageiros') {
           params[field] = parseInt(updates[field]);
-        } else if (field === 'tipo_viatura' || field === 'observacoes' || field === 'veiculo_atribuido_id') {
+        } else if (field === 'tipo_viatura' || field === 'observacoes' || field === 'veiculo_atribuido_id' || field === 'condutor_atribuido_id') {
           params[field] = updates[field] || null;
         } else {
           params[field] = updates[field];

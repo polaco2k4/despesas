@@ -46,7 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { id: 'expedientes', label: 'Expedientes', icon: Folder, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
     { id: 'fornecedores', label: 'Fornecedores', icon: Truck, roles: ['admin', 'gestor'] },
     { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
-    { id: 'frotas', label: 'Gestão de Frotas', icon: Car, roles: ['admin', 'gestor'] },
+    { id: 'frotas', label: 'Gestão de Frotas', icon: Car, roles: ['admin', 'gestor', 'colaborador'] },
     { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor', 'adm_area'] },
     { id: 'usuarios', label: 'Utilizadores', icon: Users, roles: ['admin'] },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },

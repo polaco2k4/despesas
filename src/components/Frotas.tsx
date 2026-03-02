@@ -83,7 +83,8 @@ const API_URL = 'http://localhost:3001/api';
 
 const Frotas: React.FC = () => {
   const { userProfile } = useAuth();
-  const [activeTab, setActiveTab] = useState<'veiculos' | 'manutencoes' | 'abastecimentos' | 'atribuicoes' | 'solicitacoes' | 'relatorios'>('veiculos');
+  const isColaborador = userProfile?.role === 'colaborador';
+  const [activeTab, setActiveTab] = useState<'veiculos' | 'manutencoes' | 'abastecimentos' | 'atribuicoes' | 'solicitacoes' | 'relatorios'>(isColaborador ? 'solicitacoes' : 'veiculos');
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [manutencoes, setManutencoes] = useState<Manutencao[]>([]);
   const [abastecimentos, setAbastecimentos] = useState<Abastecimento[]>([]);
@@ -125,6 +126,8 @@ const Frotas: React.FC = () => {
   const [showCondutorDropdown, setShowCondutorDropdown] = useState(false);
   const [condutorAtribuicaoSearch, setCondutorAtribuicaoSearch] = useState('');
   const [showCondutorAtribuicaoDropdown, setShowCondutorAtribuicaoDropdown] = useState(false);
+  const [condutorSolicitacaoSearch, setCondutorSolicitacaoSearch] = useState('');
+  const [showCondutorSolicitacaoDropdown, setShowCondutorSolicitacaoDropdown] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -141,6 +144,9 @@ const Frotas: React.FC = () => {
       }
       if (!target.closest('.condutor-atribuicao-autocomplete')) {
         setShowCondutorAtribuicaoDropdown(false);
+      }
+      if (!target.closest('.condutor-solicitacao-autocomplete')) {
+        setShowCondutorSolicitacaoDropdown(false);
       }
     };
 
@@ -442,7 +448,7 @@ const Frotas: React.FC = () => {
       setEditingAtribuicao({});
       setShowAtribuicaoModal(true);
     } else if (activeTab === 'solicitacoes') {
-      setEditingSolicitacao({});
+      setEditingSolicitacao({ solicitante_id: userProfile?.id });
       setShowSolicitacaoModal(true);
     }
   };
@@ -471,9 +477,26 @@ const Frotas: React.FC = () => {
   };
 
   const handleEditSolicitacao = (solicitacao: any) => {
-    setEditingSolicitacao(solicitacao);
+    const formatDateForInput = (dateString: string) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    setEditingSolicitacao({
+      ...solicitacao,
+      data_inicio: formatDateForInput(solicitacao.data_inicio),
+      data_fim: formatDateForInput(solicitacao.data_fim)
+    });
     setIsEditingSolicitacao(true);
     setShowSolicitacaoModal(true);
+    const condutor = usuarios.find(u => u.id === solicitacao.condutor_atribuido_id);
+    setCondutorSolicitacaoSearch(condutor ? condutor.nome : '');
   };
 
   const handleDeleteSolicitacao = async (id: string) => {
@@ -688,6 +711,11 @@ const Frotas: React.FC = () => {
   };
 
   const canManageFrotas = userProfile?.role === 'admin' || userProfile?.role === 'gestor';
+  const isColaboradorRole = userProfile?.role === 'colaborador';
+
+  const filteredSolicitacoes = isColaboradorRole 
+    ? solicitacoes.filter(s => s.solicitante_id === userProfile?.id)
+    : solicitacoes;
 
   const filteredVeiculos = veiculos.filter(v => {
     const matchesSearch = v.matricula.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -742,7 +770,7 @@ const Frotas: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">Gestão de Frotas</h1>
           <p className="text-sm text-gray-500 mt-1">Gerencie veículos, manutenções e abastecimentos</p>
         </div>
-        {canManageFrotas && shouldShowCreateButton() && (
+        {((canManageFrotas && shouldShowCreateButton()) || (isColaboradorRole && activeTab === 'solicitacoes')) && (
           <button
             onClick={handleOpenCreateModal}
             className="mt-4 md:mt-0 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -756,50 +784,58 @@ const Frotas: React.FC = () => {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
-            <button
-              onClick={() => setActiveTab('veiculos')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'veiculos'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Car className="inline mr-2" size={18} />
-              Veículos
-            </button>
-            <button
-              onClick={() => setActiveTab('manutencoes')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'manutencoes'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Wrench className="inline mr-2" size={18} />
-              Manutenções
-            </button>
-            <button
-              onClick={() => setActiveTab('abastecimentos')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'abastecimentos'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Fuel className="inline mr-2" size={18} />
-              Abastecimentos
-            </button>
-            <button
-              onClick={() => setActiveTab('atribuicoes')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'atribuicoes'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Users className="inline mr-2" size={18} />
-              Atribuições
-            </button>
+            {!isColaboradorRole && (
+              <button
+                onClick={() => setActiveTab('veiculos')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'veiculos'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Car className="inline mr-2" size={18} />
+                Veículos
+              </button>
+            )}
+            {!isColaboradorRole && (
+              <button
+                onClick={() => setActiveTab('manutencoes')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'manutencoes'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Wrench className="inline mr-2" size={18} />
+                Manutenções
+              </button>
+            )}
+            {!isColaboradorRole && (
+              <button
+                onClick={() => setActiveTab('abastecimentos')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'abastecimentos'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Fuel className="inline mr-2" size={18} />
+                Abastecimentos
+              </button>
+            )}
+            {!isColaboradorRole && (
+              <button
+                onClick={() => setActiveTab('atribuicoes')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'atribuicoes'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <Users className="inline mr-2" size={18} />
+                Atribuições
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('solicitacoes')}
               className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
@@ -811,17 +847,19 @@ const Frotas: React.FC = () => {
               <ClipboardList className="inline mr-2" size={18} />
               Solicitações
             </button>
-            <button
-              onClick={() => setActiveTab('relatorios')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'relatorios'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <BarChart3 className="inline mr-2" size={18} />
-              Relatórios
-            </button>
+            {!isColaboradorRole && (
+              <button
+                onClick={() => setActiveTab('relatorios')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                  activeTab === 'relatorios'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <BarChart3 className="inline mr-2" size={18} />
+                Relatórios
+              </button>
+            )}
           </nav>
         </div>
 
@@ -1173,7 +1211,7 @@ const Frotas: React.FC = () => {
 
           {activeTab === 'solicitacoes' && (
             <div className="space-y-4">
-              {solicitacoes.map((solicitacao) => (
+              {filteredSolicitacoes.map((solicitacao) => (
                 <div key={solicitacao.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -1243,7 +1281,7 @@ const Frotas: React.FC = () => {
                   </div>
                 </div>
               ))}
-              {solicitacoes.length === 0 && (
+              {filteredSolicitacoes.length === 0 && (
                 <div className="text-center py-12">
                   <ClipboardList className="mx-auto h-12 w-12 text-gray-400" />
                   <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhuma solicitação registrada</h3>
@@ -1898,6 +1936,121 @@ const Frotas: React.FC = () => {
                     placeholder="Observações adicionais..."
                   />
                 </div>
+                {canManageFrotas && (
+                  <>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                      <select
+                        value={editingSolicitacao.status || 'pendente'}
+                        onChange={(e) => setEditingSolicitacao({ ...editingSolicitacao, status: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="pendente">Pendente</option>
+                        <option value="aprovada">Aprovada</option>
+                        <option value="atribuida">Atribuída</option>
+                        <option value="rejeitada">Rejeitada</option>
+                        <option value="concluida">Concluída</option>
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Veículo Atribuído</label>
+                      <select
+                        value={editingSolicitacao.veiculo_atribuido_id || ''}
+                        onChange={(e) => setEditingSolicitacao({ ...editingSolicitacao, veiculo_atribuido_id: e.target.value || null })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Nenhum veículo atribuído</option>
+                        {veiculos.filter(v => v.status === 'ativo').map((v) => (
+                          <option key={v.id} value={v.id}>{v.matricula} - {v.marca} {v.modelo}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2 relative condutor-solicitacao-autocomplete">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Condutor Atribuído</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={condutorSolicitacaoSearch}
+                          onChange={(e) => {
+                            setCondutorSolicitacaoSearch(e.target.value);
+                            setShowCondutorSolicitacaoDropdown(true);
+                            if (!e.target.value) {
+                              setEditingSolicitacao({ ...editingSolicitacao, condutor_atribuido_id: null });
+                            }
+                          }}
+                          onFocus={() => setShowCondutorSolicitacaoDropdown(true)}
+                          placeholder="Pesquisar condutor..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                        />
+                        {condutorSolicitacaoSearch && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSolicitacao({ ...editingSolicitacao, condutor_atribuido_id: null });
+                              setCondutorSolicitacaoSearch('');
+                              setShowCondutorSolicitacaoDropdown(false);
+                            }}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X size={16} />
+                          </button>
+                        )}
+                      </div>
+                      {showCondutorSolicitacaoDropdown && condutorSolicitacaoSearch && usuarios.filter(u => u.nome.toLowerCase().includes(condutorSolicitacaoSearch.toLowerCase())).length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {usuarios.filter(u => u.nome.toLowerCase().includes(condutorSolicitacaoSearch.toLowerCase())).map((usuario) => (
+                            <button
+                              key={usuario.id}
+                              type="button"
+                              onClick={() => {
+                                setEditingSolicitacao({ ...editingSolicitacao, condutor_atribuido_id: usuario.id });
+                                setCondutorSolicitacaoSearch(usuario.nome);
+                                setShowCondutorSolicitacaoDropdown(false);
+                              }}
+                              className="w-full text-left px-4 py-2 hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition-colors"
+                            >
+                              <div className="font-medium text-gray-900">{usuario.nome}</div>
+                              {usuario.email && (
+                                <div className="text-xs text-gray-500">{usuario.email}</div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {showCondutorSolicitacaoDropdown && condutorSolicitacaoSearch && usuarios.filter(u => u.nome.toLowerCase().includes(condutorSolicitacaoSearch.toLowerCase())).length === 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 text-center text-gray-500 text-sm">
+                          Nenhum condutor encontrado
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+                {isColaboradorRole && (editingSolicitacao.veiculo_atribuido_id || editingSolicitacao.condutor_atribuido_id) && (
+                  <>
+                    {editingSolicitacao.veiculo_atribuido_id && (
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Veículo Atribuído</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={veiculos.find(v => v.id === editingSolicitacao.veiculo_atribuido_id)?.matricula + ' - ' + veiculos.find(v => v.id === editingSolicitacao.veiculo_atribuido_id)?.marca + ' ' + veiculos.find(v => v.id === editingSolicitacao.veiculo_atribuido_id)?.modelo || 'Não atribuído'}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        />
+                      </div>
+                    )}
+                    {editingSolicitacao.condutor_atribuido_id && (
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Condutor Atribuído</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={usuarios.find(u => u.id === editingSolicitacao.condutor_atribuido_id)?.nome || 'Não atribuído'}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
               <div className="flex justify-end space-x-3 pt-4">
                 <button
@@ -1981,7 +2134,17 @@ const Frotas: React.FC = () => {
               {selectedSolicitacao.veiculo_atribuido_id && (
                 <div>
                   <label className="text-sm font-medium text-gray-500">Veículo Atribuído</label>
-                  <p className="text-lg font-semibold">{selectedSolicitacao.veiculo_matricula || 'ID: ' + selectedSolicitacao.veiculo_atribuido_id}</p>
+                  <p className="text-lg font-semibold">
+                    {selectedSolicitacao.veiculo_matricula 
+                      ? `${selectedSolicitacao.veiculo_matricula} - ${selectedSolicitacao.veiculo_marca} ${selectedSolicitacao.veiculo_modelo}`
+                      : 'Veículo não encontrado'}
+                  </p>
+                </div>
+              )}
+              {selectedSolicitacao.condutor_atribuido_id && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Condutor Atribuído</label>
+                  <p className="text-lg font-semibold">{selectedSolicitacao.condutor_nome || 'Condutor não encontrado'}</p>
                 </div>
               )}
             </div>
