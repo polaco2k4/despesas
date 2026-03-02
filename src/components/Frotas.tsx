@@ -1258,7 +1258,7 @@ const Frotas: React.FC = () => {
                         >
                           <Eye size={18} />
                         </button>
-                        {canManageFrotas && (
+                        {(canManageFrotas || (isColaboradorRole && solicitacao.solicitante_id === userProfile?.id)) && (
                           <>
                             <button
                               onClick={() => handleEditSolicitacao(solicitacao)}
@@ -2023,32 +2023,6 @@ const Frotas: React.FC = () => {
                         </div>
                       )}
                     </div>
-                  </>
-                )}
-                {isColaboradorRole && (editingSolicitacao.veiculo_atribuido_id || editingSolicitacao.condutor_atribuido_id) && (
-                  <>
-                    {editingSolicitacao.veiculo_atribuido_id && (
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Veículo Atribuído</label>
-                        <input
-                          type="text"
-                          disabled
-                          value={veiculos.find(v => v.id === editingSolicitacao.veiculo_atribuido_id)?.matricula + ' - ' + veiculos.find(v => v.id === editingSolicitacao.veiculo_atribuido_id)?.marca + ' ' + veiculos.find(v => v.id === editingSolicitacao.veiculo_atribuido_id)?.modelo || 'Não atribuído'}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
-                        />
-                      </div>
-                    )}
-                    {editingSolicitacao.condutor_atribuido_id && (
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Condutor Atribuído</label>
-                        <input
-                          type="text"
-                          disabled
-                          value={usuarios.find(u => u.id === editingSolicitacao.condutor_atribuido_id)?.nome || 'Não atribuído'}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
-                        />
-                      </div>
-                    )}
                   </>
                 )}
               </div>
