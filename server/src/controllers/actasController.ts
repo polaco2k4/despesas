@@ -1,6 +1,34 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 
+const WEBHOOK_URL = 'https://hook.eu2.make.com/x9t6rnvlq94vt3y7d65t99rdyyknu175';
+
+const sendToWebhook = async (data: any) => {
+  try {
+    console.log('📤 Sending to webhook:', JSON.stringify(data, null, 2));
+    
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+    
+    const responseText = await response.text();
+    
+    if (!response.ok) {
+      console.error('❌ Webhook error:', response.status, response.statusText);
+      console.error('Response body:', responseText);
+    } else {
+      console.log('✅ Webhook sent successfully');
+      console.log('Response:', responseText);
+    }
+  } catch (error) {
+    console.error('❌ Error sending to webhook:', error);
+  }
+};
+
 export const getAllReunioes = async (req: Request, res: Response) => {
   try {
     const { departamento_id, status, data_inicio, data_fim } = req.query;
@@ -138,6 +166,9 @@ export const createReuniao = async (req: Request, res: Response) => {
       participantes_externos
     } = req.body;
     
+    console.log('🔍 DEBUG - convocador_id recebido:', convocador_id);
+    console.log('🔍 DEBUG - Headers:', { userId: req.headers['x-user-id'], userRole: req.headers['x-user-role'] });
+    
     if (!titulo || !tipo || !data_hora) {
       console.error('❌ Missing required fields:', { titulo, tipo, data_hora });
       return res.status(400).json({ error: 'Campos obrigatórios: titulo, tipo, data_hora' });
@@ -225,7 +256,7 @@ export const createReuniao = async (req: Request, res: Response) => {
       data_hora_fim: formattedDateFim,
       local: local || null,
       departamento_id: departamento_id || null,
-      convocador_id: convocador_id || null,
+      convocador_id: convocador_id || req.headers['x-user-id'] || null,
       agenda: agenda || null,
       observacoes: observacoes || null
     };
@@ -274,6 +305,120 @@ export const createReuniao = async (req: Request, res: Response) => {
         });
       }
     }
+    
+    // Fetch complete meeting data with participants for webhook
+    const completeReuniaoQuery = `
+      SELECT 
+        r.*,
+        d.nome as departamento_nome,
+        u.nome as convocador_nome,
+        u.email as convocador_email
+      FROM reunioes r
+      LEFT JOIN departamentos d ON r.departamento_id = d.id
+      LEFT JOIN usuarios u ON r.convocador_id = u.id
+      WHERE r.id = @id
+    `;
+    
+    const participantesCompleteQuery = `
+      SELECT 
+        rp.*,
+        u.nome as usuario_nome,
+        u.email as usuario_email
+      FROM reunioes_participantes rp
+      LEFT JOIN usuarios u ON rp.usuario_id = u.id
+      WHERE rp.reuniao_id = @id
+    `;
+    
+    const participantesExternosQuery = `
+      SELECT * FROM reunioes_participantes_externos
+      WHERE reuniao_id = @id
+    `;
+    
+    const [completeReuniao, participantesComplete, participantesExternosComplete] = await Promise.all([
+      executeQuery(completeReuniaoQuery, { id: reuniao.id }),
+      executeQuery(participantesCompleteQuery, { id: reuniao.id }),
+      executeQuery(participantesExternosQuery, { id: reuniao.id })
+    ]);
+    
+    // Combine internal and external participants
+    const allParticipantes = [
+      ...participantesComplete.map((p: any) => ({
+        ...p,
+        tipo_participante: 'interno'
+      })),
+      ...participantesExternosComplete.map((p: any) => ({
+        ...p,
+        tipo_participante: 'externo'
+      }))
+    ];
+    
+    // Extract all emails from participants in simplified format
+    const attendees = [
+      ...participantesComplete.map((p: any) => ({
+        email: p.usuario_email
+      })).filter((attendee: any) => attendee.email),
+      ...participantesExternosComplete.map((p: any) => ({
+        email: p.email
+      })).filter((attendee: any) => attendee.email)
+    ];
+    
+    // Create additional email formats for different Make.com modules
+    const emailAddresses = attendees.map(a => a.email);
+    const emailList = emailAddresses.join(', ');
+    const toRecipients = attendees.map(a => ({
+      emailAddress: {
+        address: a.email
+      }
+    }));
+    
+    // Format dates to ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
+    const startDate = new Date(completeReuniao[0].data_hora).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const endDate = completeReuniao[0].data_hora_fim 
+      ? new Date(completeReuniao[0].data_hora_fim).toISOString().replace(/\.\d{3}Z$/, 'Z')
+      : new Date(new Date(completeReuniao[0].data_hora).getTime() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z'); // +1 hour default
+    
+    console.log('🔍 Debug - Start Date:', startDate);
+    console.log('🔍 Debug - End Date:', endDate);
+    console.log('🔍 Debug - Attendees count:', attendees.length);
+    console.log('🔍 Debug - Attendees:', JSON.stringify(attendees, null, 2));
+    
+    // Send to webhook with all fields
+    const webhookData = {
+      action: 'created',
+      // MS Teams Online Meeting fields (only these are sent to MS Teams module)
+      msTeams: {
+        subject: completeReuniao[0].titulo || 'Reunião',
+        startDateTime: startDate,
+        endDateTime: endDate
+      },
+      // Additional fields for other Make.com modules
+      attendees: attendees,
+      emailAddresses: emailAddresses,
+      emailList: emailList,
+      toRecipients: toRecipients,
+      // All meeting fields
+      id: completeReuniao[0].id,
+      titulo: completeReuniao[0].titulo,
+      tipo: completeReuniao[0].tipo,
+      data_hora: completeReuniao[0].data_hora,
+      data_hora_fim: completeReuniao[0].data_hora_fim,
+      local: completeReuniao[0].local,
+      departamento_id: completeReuniao[0].departamento_id,
+      departamento_nome: completeReuniao[0].departamento_nome,
+      convocador_id: completeReuniao[0].convocador_id,
+      convocador_nome: completeReuniao[0].convocador_nome,
+      convocador_email: completeReuniao[0].convocador_email,
+      agenda: completeReuniao[0].agenda,
+      observacoes: completeReuniao[0].observacoes,
+      status: completeReuniao[0].status,
+      created_at: completeReuniao[0].created_at,
+      updated_at: completeReuniao[0].updated_at,
+      participantes: allParticipantes
+    };
+    
+    sendToWebhook(webhookData).catch(err => 
+      console.error('Webhook error (non-blocking):', err)
+    );
     
     return res.status(201).json(reuniao);
   } catch (error: any) {
@@ -547,6 +692,115 @@ export const updateReuniao = async (req: Request, res: Response) => {
     const updatedReuniao = await executeQuery(
       'SELECT * FROM reunioes WHERE id = @id',
       { id }
+    );
+    
+    // Fetch complete meeting data with participants for webhook
+    const completeReuniaoQuery = `
+      SELECT 
+        r.*,
+        d.nome as departamento_nome,
+        u.nome as convocador_nome,
+        u.email as convocador_email
+      FROM reunioes r
+      LEFT JOIN departamentos d ON r.departamento_id = d.id
+      LEFT JOIN usuarios u ON r.convocador_id = u.id
+      WHERE r.id = @id
+    `;
+    
+    const participantesCompleteQuery = `
+      SELECT 
+        rp.*,
+        u.nome as usuario_nome,
+        u.email as usuario_email
+      FROM reunioes_participantes rp
+      LEFT JOIN usuarios u ON rp.usuario_id = u.id
+      WHERE rp.reuniao_id = @id
+    `;
+    
+    const participantesExternosQuery = `
+      SELECT * FROM reunioes_participantes_externos
+      WHERE reuniao_id = @id
+    `;
+    
+    const [completeReuniao, participantesComplete, participantesExternosComplete] = await Promise.all([
+      executeQuery(completeReuniaoQuery, { id }),
+      executeQuery(participantesCompleteQuery, { id }),
+      executeQuery(participantesExternosQuery, { id })
+    ]);
+    
+    // Combine internal and external participants
+    const allParticipantes = [
+      ...participantesComplete.map((p: any) => ({
+        ...p,
+        tipo_participante: 'interno'
+      })),
+      ...participantesExternosComplete.map((p: any) => ({
+        ...p,
+        tipo_participante: 'externo'
+      }))
+    ];
+    
+    // Extract all emails from participants in simplified format
+    const attendees = [
+      ...participantesComplete.map((p: any) => ({
+        email: p.usuario_email
+      })).filter((attendee: any) => attendee.email),
+      ...participantesExternosComplete.map((p: any) => ({
+        email: p.email
+      })).filter((attendee: any) => attendee.email)
+    ];
+    
+    // Create additional email formats for different Make.com modules
+    const emailAddresses = attendees.map(a => a.email);
+    const emailList = emailAddresses.join(', ');
+    const toRecipients = attendees.map(a => ({
+      emailAddress: {
+        address: a.email
+      }
+    }));
+    
+    // Format dates to ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
+    const startDate = new Date(completeReuniao[0].data_hora).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const endDate = completeReuniao[0].data_hora_fim 
+      ? new Date(completeReuniao[0].data_hora_fim).toISOString().replace(/\.\d{3}Z$/, 'Z')
+      : new Date(new Date(completeReuniao[0].data_hora).getTime() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z'); // +1 hour default
+    
+    // Send to webhook with all fields
+    const webhookData = {
+      action: 'updated',
+      // MS Teams Online Meeting fields (only these are sent to MS Teams module)
+      msTeams: {
+        subject: completeReuniao[0].titulo || 'Reunião',
+        startDateTime: startDate,
+        endDateTime: endDate
+      },
+      // Additional fields for other Make.com modules
+      attendees: attendees,
+      emailAddresses: emailAddresses,
+      emailList: emailList,
+      toRecipients: toRecipients,
+      // All meeting fields
+      id: completeReuniao[0].id,
+      titulo: completeReuniao[0].titulo,
+      tipo: completeReuniao[0].tipo,
+      data_hora: completeReuniao[0].data_hora,
+      data_hora_fim: completeReuniao[0].data_hora_fim,
+      local: completeReuniao[0].local,
+      departamento_id: completeReuniao[0].departamento_id,
+      departamento_nome: completeReuniao[0].departamento_nome,
+      convocador_id: completeReuniao[0].convocador_id,
+      convocador_nome: completeReuniao[0].convocador_nome,
+      convocador_email: completeReuniao[0].convocador_email,
+      agenda: completeReuniao[0].agenda,
+      observacoes: completeReuniao[0].observacoes,
+      status: completeReuniao[0].status,
+      created_at: completeReuniao[0].created_at,
+      updated_at: completeReuniao[0].updated_at,
+      participantes: allParticipantes
+    };
+    
+    sendToWebhook(webhookData).catch(err => 
+      console.error('Webhook error (non-blocking):', err)
     );
     
     return res.json(updatedReuniao[0]);

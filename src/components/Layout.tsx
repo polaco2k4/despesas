@@ -202,7 +202,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Logo para desktop - alinhado à esquerda */}
             <div className="hidden lg:flex items-center ml-4">
               <h1 className="text-2xl font-bold text-gray-900">
-                Sistema de Gestão Corporativa
+                Sistema Integrado de Gestão Empresarial
               </h1>
             </div>
             
@@ -263,7 +263,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Footer */}
         <footer className="bg-white border-t border-gray-100 px-6 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
-            <div> BudgetFlow - Sistema de Gestão Orçamental</div>
+            <div> SIGE - Sistema Integrado de Gestão Empresarial, by AZFBUSINESS</div>
             <div className="mt-2 md:mt-0">
               <span className="inline-flex items-center">
                 <span className="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></span>
