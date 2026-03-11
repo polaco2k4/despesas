@@ -139,8 +139,12 @@ export const createContrato = async (req: Request, res: Response) => {
     } = req.body;
     const criado_por = req.headers['x-user-id'] as string;
 
-    if (!numero_contrato || !titulo || !data_inicio) {
-      return res.status(400).json({ error: 'Campos obrigatórios: numero_contrato, titulo, data_inicio' });
+    if (!numero_contrato || !titulo || !data_inicio || valor_total === undefined || valor_total === null) {
+      return res.status(400).json({ error: 'Campos obrigatórios: numero_contrato, titulo, data_inicio, valor_total' });
+    }
+
+    if (valor_total < 0) {
+      return res.status(400).json({ error: 'O valor total não pode ser negativo' });
     }
 
     const query = `
@@ -171,6 +175,41 @@ export const createContrato = async (req: Request, res: Response) => {
       dias_alerta_vencimento: dias_alerta_vencimento || 30
     });
 
+    const contratoId = result[0].id;
+
+    // Notificar gestores e administradores sobre o novo contrato
+    try {
+      const gestoresQuery = `
+        SELECT DISTINCT u.id, u.nome, u.email
+        FROM usuarios u
+        WHERE u.perfil IN ('gestor', 'admin')
+          AND u.ativo = 1
+          AND u.id != @criado_por
+      `;
+      const gestores = await executeQuery(gestoresQuery, { criado_por });
+
+      if (gestores.length > 0) {
+        const notificacoesQuery = `
+          INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo, categoria, acao_id)
+          VALUES (@usuario_id, @titulo, @mensagem, @tipo, @categoria, @acao_id)
+        `;
+
+        for (const gestor of gestores) {
+          await executeQuery(notificacoesQuery, {
+            usuario_id: gestor.id,
+            titulo: 'Novo Contrato Criado',
+            mensagem: `Um novo contrato "${titulo}" (${numero_contrato}) foi criado e requer sua atenção.`,
+            tipo: 'info',
+            categoria: 'contrato',
+            acao_id: contratoId
+          });
+        }
+      }
+    } catch (notifError) {
+      console.error('Erro ao criar notificações:', notifError);
+      // Não falhar a criação do contrato se a notificação falhar
+    }
+
     return res.status(201).json(result[0]);
   } catch (error: any) {
     console.error('Error creating contrato:', error);
@@ -185,6 +224,17 @@ export const updateContrato = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+    const alterado_por = req.headers['x-user-id'] as string;
+
+    // Buscar contrato atual para comparar mudanças
+    const contratoAtual = await executeQuery(
+      'SELECT * FROM contratos WHERE id = @id',
+      { id }
+    );
+
+    if (contratoAtual.length === 0) {
+      return res.status(404).json({ error: 'Contrato não encontrado' });
+    }
 
     const fields: string[] = [];
     const params: Record<string, any> = { id };
@@ -218,6 +268,54 @@ export const updateContrato = async (req: Request, res: Response) => {
 
     if (result.length === 0) {
       return res.status(404).json({ error: 'Contrato não encontrado' });
+    }
+
+    // Notificar sobre mudanças importantes (status, valor)
+    try {
+      const statusMudou = updates.status && updates.status !== contratoAtual[0].status;
+      const valorMudou = updates.valor_total && updates.valor_total !== contratoAtual[0].valor_total;
+
+      if (statusMudou || valorMudou) {
+        const gestoresQuery = `
+          SELECT DISTINCT u.id, u.nome, u.email
+          FROM usuarios u
+          WHERE u.perfil IN ('gestor', 'admin')
+            AND u.ativo = 1
+            AND u.id != @alterado_por
+        `;
+        const gestores = await executeQuery(gestoresQuery, { alterado_por });
+
+        if (gestores.length > 0) {
+          let mensagem = '';
+          let titulo = '';
+
+          if (statusMudou) {
+            titulo = 'Status de Contrato Alterado';
+            mensagem = `O contrato "${contratoAtual[0].titulo}" (${contratoAtual[0].numero_contrato}) teve seu status alterado de "${contratoAtual[0].status}" para "${updates.status}".`;
+          } else if (valorMudou) {
+            titulo = 'Valor de Contrato Alterado';
+            mensagem = `O contrato "${contratoAtual[0].titulo}" (${contratoAtual[0].numero_contrato}) teve seu valor alterado.`;
+          }
+
+          const notificacoesQuery = `
+            INSERT INTO notificacoes (usuario_id, titulo, mensagem, tipo, categoria, acao_id)
+            VALUES (@usuario_id, @titulo, @mensagem, @tipo, @categoria, @acao_id)
+          `;
+
+          for (const gestor of gestores) {
+            await executeQuery(notificacoesQuery, {
+              usuario_id: gestor.id,
+              titulo,
+              mensagem,
+              tipo: 'warning',
+              categoria: 'contrato',
+              acao_id: id
+            });
+          }
+        }
+      }
+    } catch (notifError) {
+      console.error('Erro ao criar notificações:', notifError);
     }
 
     return res.json(result[0]);
