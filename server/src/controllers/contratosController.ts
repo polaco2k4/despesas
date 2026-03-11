@@ -134,7 +134,8 @@ export const createContrato = async (req: Request, res: Response) => {
     const {
       numero_contrato, titulo, descricao, tipo, fornecedor_id, departamento_id,
       responsavel_id, valor_total, moeda, data_inicio, data_fim, data_assinatura,
-      status, prioridade, termos, observacoes, anexo_url
+      status, prioridade, termos, observacoes, anexo_url,
+      renovacao_automatica, periodo_renovacao, dias_alerta_vencimento
     } = req.body;
     const criado_por = req.headers['x-user-id'] as string;
 
@@ -146,13 +147,15 @@ export const createContrato = async (req: Request, res: Response) => {
       INSERT INTO contratos (
         numero_contrato, titulo, descricao, tipo, fornecedor_id, departamento_id,
         responsavel_id, valor_total, moeda, data_inicio, data_fim, data_assinatura,
-        status, prioridade, termos, observacoes, anexo_url, criado_por
+        status, prioridade, termos, observacoes, anexo_url, criado_por,
+        renovacao_automatica, periodo_renovacao, dias_alerta_vencimento
       )
       OUTPUT INSERTED.*
       VALUES (
         @numero_contrato, @titulo, @descricao, @tipo, @fornecedor_id, @departamento_id,
         @responsavel_id, @valor_total, @moeda, @data_inicio, @data_fim, @data_assinatura,
-        @status, @prioridade, @termos, @observacoes, @anexo_url, @criado_por
+        @status, @prioridade, @termos, @observacoes, @anexo_url, @criado_por,
+        @renovacao_automatica, @periodo_renovacao, @dias_alerta_vencimento
       )
     `;
     const result = await executeQuery(query, {
@@ -162,7 +165,10 @@ export const createContrato = async (req: Request, res: Response) => {
       moeda: moeda || 'AOA', data_inicio, data_fim: data_fim || null,
       data_assinatura: data_assinatura || null, status: status || 'rascunho',
       prioridade: prioridade || 'media', termos: termos || null,
-      observacoes: observacoes || null, anexo_url: anexo_url || null, criado_por
+      observacoes: observacoes || null, anexo_url: anexo_url || null, criado_por,
+      renovacao_automatica: renovacao_automatica || 0,
+      periodo_renovacao: periodo_renovacao || null,
+      dias_alerta_vencimento: dias_alerta_vencimento || 30
     });
 
     return res.status(201).json(result[0]);
@@ -187,7 +193,8 @@ export const updateContrato = async (req: Request, res: Response) => {
       'numero_contrato', 'titulo', 'descricao', 'tipo', 'fornecedor_id',
       'departamento_id', 'responsavel_id', 'valor_total', 'moeda',
       'data_inicio', 'data_fim', 'data_assinatura', 'status', 'prioridade',
-      'termos', 'observacoes', 'anexo_url'
+      'termos', 'observacoes', 'anexo_url',
+      'renovacao_automatica', 'periodo_renovacao', 'dias_alerta_vencimento'
     ];
 
     allowedFields.forEach(field => {
@@ -354,5 +361,237 @@ export const deleteAnexo = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error deleting anexo:', error);
     return res.status(500).json({ error: 'Erro ao remover ficheiro' });
+  }
+};
+
+// Verificar contratos a vencer e enviar alertas
+export const verificarContratosVencimento = async (req: Request, res: Response) => {
+  try {
+    const query = `
+      SELECT 
+        c.*,
+        f.nome as fornecedor_nome,
+        r.nome as responsavel_nome,
+        DATEDIFF(day, GETDATE(), c.data_fim) as dias_restantes
+      FROM contratos c
+      LEFT JOIN fornecedores f ON c.fornecedor_id = f.id
+      LEFT JOIN usuarios r ON c.responsavel_id = r.id
+      WHERE c.status = 'ativo'
+        AND c.data_fim IS NOT NULL
+        AND DATEDIFF(day, GETDATE(), c.data_fim) <= c.dias_alerta_vencimento
+        AND DATEDIFF(day, GETDATE(), c.data_fim) >= 0
+        AND (c.data_ultimo_alerta IS NULL OR DATEDIFF(day, c.data_ultimo_alerta, GETDATE()) >= 7)
+      ORDER BY c.data_fim ASC
+    `;
+
+    const contratos = await executeQuery(query);
+
+    // Atualizar data do último alerta
+    if (contratos.length > 0) {
+      const ids = contratos.map((c: any) => `'${c.id}'`).join(',');
+      await executeQuery(`
+        UPDATE contratos 
+        SET data_ultimo_alerta = GETDATE() 
+        WHERE id IN (${ids})
+      `);
+    }
+
+    return res.json({
+      total: contratos.length,
+      contratos: contratos.map((c: any) => ({
+        id: c.id,
+        numero_contrato: c.numero_contrato,
+        titulo: c.titulo,
+        fornecedor_nome: c.fornecedor_nome,
+        responsavel_nome: c.responsavel_nome,
+        data_fim: c.data_fim,
+        dias_restantes: c.dias_restantes,
+        renovacao_automatica: c.renovacao_automatica,
+        periodo_renovacao: c.periodo_renovacao
+      }))
+    });
+  } catch (error) {
+    console.error('Error verificando contratos:', error);
+    return res.status(500).json({ error: 'Erro ao verificar contratos a vencer' });
+  }
+};
+
+// Processar renovação automática de contratos
+export const processarRenovacaoAutomatica = async (req: Request, res: Response) => {
+  try {
+    // Buscar contratos que devem ser renovados automaticamente
+    const query = `
+      SELECT *
+      FROM contratos
+      WHERE status = 'ativo'
+        AND renovacao_automatica = 1
+        AND data_fim IS NOT NULL
+        AND DATEDIFF(day, GETDATE(), data_fim) <= 0
+        AND periodo_renovacao IS NOT NULL
+    `;
+
+    const contratosParaRenovar = await executeQuery(query);
+    const renovados = [];
+
+    for (const contrato of contratosParaRenovar) {
+      try {
+        // Atualizar status do contrato original para concluído
+        await executeQuery(`
+          UPDATE contratos 
+          SET status = 'concluido', updated_at = GETDATE()
+          WHERE id = @id
+        `, { id: contrato.id });
+
+        // Criar novo contrato renovado
+        const novaDataInicio = new Date(contrato.data_fim);
+        novaDataInicio.setDate(novaDataInicio.getDate() + 1);
+        
+        const novaDataFim = new Date(novaDataInicio);
+        novaDataFim.setMonth(novaDataFim.getMonth() + contrato.periodo_renovacao);
+
+        const novoNumero = `${contrato.numero_contrato}-R${contrato.numero_renovacoes + 1}`;
+
+        const insertQuery = `
+          INSERT INTO contratos (
+            numero_contrato, titulo, descricao, tipo, fornecedor_id, departamento_id,
+            responsavel_id, valor_total, moeda, data_inicio, data_fim, status,
+            prioridade, termos, observacoes, renovacao_automatica, periodo_renovacao,
+            dias_alerta_vencimento, numero_renovacoes, contrato_original_id, criado_por
+          )
+          OUTPUT INSERTED.*
+          VALUES (
+            @numero_contrato, @titulo, @descricao, @tipo, @fornecedor_id, @departamento_id,
+            @responsavel_id, @valor_total, @moeda, @data_inicio, @data_fim, 'ativo',
+            @prioridade, @termos, @observacoes, @renovacao_automatica, @periodo_renovacao,
+            @dias_alerta_vencimento, @numero_renovacoes, @contrato_original_id, @criado_por
+          )
+        `;
+
+        const novoContrato = await executeQuery(insertQuery, {
+          numero_contrato: novoNumero,
+          titulo: contrato.titulo,
+          descricao: `Renovação automática do contrato ${contrato.numero_contrato}`,
+          tipo: contrato.tipo,
+          fornecedor_id: contrato.fornecedor_id,
+          departamento_id: contrato.departamento_id,
+          responsavel_id: contrato.responsavel_id,
+          valor_total: contrato.valor_total,
+          moeda: contrato.moeda,
+          data_inicio: novaDataInicio.toISOString().split('T')[0],
+          data_fim: novaDataFim.toISOString().split('T')[0],
+          prioridade: contrato.prioridade,
+          termos: contrato.termos,
+          observacoes: contrato.observacoes,
+          renovacao_automatica: contrato.renovacao_automatica,
+          periodo_renovacao: contrato.periodo_renovacao,
+          dias_alerta_vencimento: contrato.dias_alerta_vencimento,
+          numero_renovacoes: contrato.numero_renovacoes + 1,
+          contrato_original_id: contrato.contrato_original_id || contrato.id,
+          criado_por: contrato.criado_por
+        });
+
+        renovados.push({
+          contrato_original: contrato.numero_contrato,
+          novo_contrato: novoNumero,
+          data_inicio: novaDataInicio,
+          data_fim: novaDataFim
+        });
+      } catch (error) {
+        console.error(`Erro ao renovar contrato ${contrato.numero_contrato}:`, error);
+      }
+    }
+
+    return res.json({
+      message: `${renovados.length} contrato(s) renovado(s) automaticamente`,
+      renovados
+    });
+  } catch (error) {
+    console.error('Error processando renovação:', error);
+    return res.status(500).json({ error: 'Erro ao processar renovação automática' });
+  }
+};
+
+// Renovar contrato manualmente
+export const renovarContrato = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { periodo_meses, manter_valores } = req.body;
+    const userId = req.headers['x-user-id'] as string;
+
+    // Buscar contrato original
+    const contratoQuery = `SELECT * FROM contratos WHERE id = @id`;
+    const contratos = await executeQuery(contratoQuery, { id });
+
+    if (contratos.length === 0) {
+      return res.status(404).json({ error: 'Contrato não encontrado' });
+    }
+
+    const contrato = contratos[0];
+
+    // Calcular novas datas
+    const novaDataInicio = contrato.data_fim 
+      ? new Date(new Date(contrato.data_fim).getTime() + 86400000) // +1 dia
+      : new Date();
+    
+    const novaDataFim = new Date(novaDataInicio);
+    novaDataFim.setMonth(novaDataFim.getMonth() + (periodo_meses || contrato.periodo_renovacao || 12));
+
+    const novoNumero = `${contrato.numero_contrato}-R${contrato.numero_renovacoes + 1}`;
+
+    // Criar novo contrato
+    const insertQuery = `
+      INSERT INTO contratos (
+        numero_contrato, titulo, descricao, tipo, fornecedor_id, departamento_id,
+        responsavel_id, valor_total, moeda, data_inicio, data_fim, status,
+        prioridade, termos, observacoes, renovacao_automatica, periodo_renovacao,
+        dias_alerta_vencimento, numero_renovacoes, contrato_original_id, criado_por
+      )
+      OUTPUT INSERTED.*
+      VALUES (
+        @numero_contrato, @titulo, @descricao, @tipo, @fornecedor_id, @departamento_id,
+        @responsavel_id, @valor_total, @moeda, @data_inicio, @data_fim, 'ativo',
+        @prioridade, @termos, @observacoes, @renovacao_automatica, @periodo_renovacao,
+        @dias_alerta_vencimento, @numero_renovacoes, @contrato_original_id, @criado_por
+      )
+    `;
+
+    const novoContrato = await executeQuery(insertQuery, {
+      numero_contrato: novoNumero,
+      titulo: contrato.titulo,
+      descricao: `Renovação manual do contrato ${contrato.numero_contrato}`,
+      tipo: contrato.tipo,
+      fornecedor_id: contrato.fornecedor_id,
+      departamento_id: contrato.departamento_id,
+      responsavel_id: contrato.responsavel_id,
+      valor_total: manter_valores ? contrato.valor_total : req.body.valor_total || contrato.valor_total,
+      moeda: contrato.moeda,
+      data_inicio: novaDataInicio.toISOString().split('T')[0],
+      data_fim: novaDataFim.toISOString().split('T')[0],
+      prioridade: contrato.prioridade,
+      termos: contrato.termos,
+      observacoes: contrato.observacoes,
+      renovacao_automatica: contrato.renovacao_automatica,
+      periodo_renovacao: periodo_meses || contrato.periodo_renovacao,
+      dias_alerta_vencimento: contrato.dias_alerta_vencimento,
+      numero_renovacoes: contrato.numero_renovacoes + 1,
+      contrato_original_id: contrato.contrato_original_id || contrato.id,
+      criado_por: userId
+    });
+
+    // Atualizar contrato original para concluído
+    await executeQuery(`
+      UPDATE contratos 
+      SET status = 'concluido', updated_at = GETDATE()
+      WHERE id = @id
+    `, { id });
+
+    return res.json({
+      message: 'Contrato renovado com sucesso',
+      contrato_original: contrato.numero_contrato,
+      novo_contrato: novoContrato[0]
+    });
+  } catch (error) {
+    console.error('Error renovando contrato:', error);
+    return res.status(500).json({ error: 'Erro ao renovar contrato' });
   }
 };

@@ -112,6 +112,9 @@ const Contratos: React.FC = () => {
     prioridade: 'media',
     termos: '',
     observacoes: '',
+    renovacao_automatica: false,
+    periodo_renovacao: '',
+    dias_alerta_vencimento: '30',
   });
 
   const itemsPerPage = 10;
@@ -385,6 +388,9 @@ const Contratos: React.FC = () => {
       prioridade: 'media',
       termos: '',
       observacoes: '',
+      renovacao_automatica: false,
+      periodo_renovacao: '',
+      dias_alerta_vencimento: '30',
     });
     setIsEditing(false);
     setSelectedContrato(null);
@@ -408,6 +414,9 @@ const Contratos: React.FC = () => {
       prioridade: contrato.prioridade,
       termos: contrato.termos || '',
       observacoes: contrato.observacoes || '',
+      renovacao_automatica: (contrato as any).renovacao_automatica || false,
+      periodo_renovacao: (contrato as any).periodo_renovacao?.toString() || '',
+      dias_alerta_vencimento: (contrato as any).dias_alerta_vencimento?.toString() || '30',
     });
     setSelectedContrato(contrato);
     setIsEditing(true);
@@ -975,6 +984,57 @@ const Contratos: React.FC = () => {
                 />
               </div>
 
+              {/* Configurações de Renovação */}
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-md font-semibold text-gray-900 mb-4">Configurações de Renovação</h3>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="renovacao_automatica"
+                      checked={formData.renovacao_automatica}
+                      onChange={(e) => setFormData({ ...formData, renovacao_automatica: e.target.checked })}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="renovacao_automatica" className="ml-2 block text-sm text-gray-900">
+                      Renovação Automática
+                    </label>
+                  </div>
+
+                  {formData.renovacao_automatica && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Período de Renovação (meses)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formData.periodo_renovacao}
+                          onChange={(e) => setFormData({ ...formData, periodo_renovacao: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Ex: 12"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Alertar com (dias de antecedência)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formData.dias_alerta_vencimento}
+                          onChange={(e) => setFormData({ ...formData, dias_alerta_vencimento: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Ex: 30"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   type="button"
@@ -1091,6 +1151,96 @@ const Contratos: React.FC = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">Observações</h3>
                   <p className="text-gray-900 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">{selectedContrato.observacoes}</p>
+                </div>
+              )}
+
+              {/* Informações de Renovação */}
+              {((selectedContrato as any).renovacao_automatica || (selectedContrato as any).numero_renovacoes > 0) && (
+                <div className="pt-4 border-t border-gray-200">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">Informações de Renovação</h3>
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Renovação Automática</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {(selectedContrato as any).renovacao_automatica ? 'Sim' : 'Não'}
+                        </p>
+                      </div>
+                      {(selectedContrato as any).periodo_renovacao && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Período de Renovação</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {(selectedContrato as any).periodo_renovacao} meses
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Número de Renovações</p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {(selectedContrato as any).numero_renovacoes || 0}
+                        </p>
+                      </div>
+                      {(selectedContrato as any).dias_alerta_vencimento && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Alerta de Vencimento</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {(selectedContrato as any).dias_alerta_vencimento} dias antes
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    {canEdit && selectedContrato.status === 'ativo' && (
+                      <div className="mt-4 pt-4 border-t border-blue-300">
+                        <button
+                          onClick={async () => {
+                            if (confirm('Deseja renovar este contrato manualmente?')) {
+                              try {
+                                const API_URL = window.location.hostname === 'localhost' 
+                                  ? 'http://localhost:3001/api' 
+                                  : `${window.location.protocol}//${window.location.hostname}:3001/api`;
+
+                                const response = await fetch(`${API_URL}/contratos/${selectedContrato.id}/renovar`, {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    'x-user-id': userProfile?.id || '',
+                                    'x-user-role': userProfile?.role || '',
+                                    'x-user-department-id': userProfile?.departamento_id || '',
+                                  },
+                                  body: JSON.stringify({
+                                    manter_valores: true
+                                  })
+                                });
+
+                                if (!response.ok) throw new Error('Erro ao renovar contrato');
+
+                                setAlertDialog({
+                                  isOpen: true,
+                                  title: 'Sucesso',
+                                  message: 'Contrato renovado com sucesso!',
+                                  type: 'success'
+                                });
+
+                                setShowDetailModal(false);
+                                await fetchData();
+                              } catch (error) {
+                                setAlertDialog({
+                                  isOpen: true,
+                                  title: 'Erro',
+                                  message: 'Erro ao renovar contrato',
+                                  type: 'error'
+                                });
+                              }
+                            }
+                          }}
+                          className="flex items-center px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          <TrendingUp size={16} className="mr-2" />
+                          Renovar Contrato Manualmente
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
