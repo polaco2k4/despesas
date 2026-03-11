@@ -622,79 +622,75 @@ const Contratos: React.FC = () => {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Número</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fornecedor</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vigência</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Prioridade</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Número</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Título</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fornecedor</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vigência</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedContratos.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-3 py-8 text-center text-gray-500">
                     Nenhum contrato encontrado
                   </td>
                 </tr>
               ) : (
                 paginatedContratos.map((contrato) => (
                   <tr key={contrato.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
                       {contrato.numero_contrato}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      <div className="max-w-xs truncate">{contrato.titulo}</div>
+                    <td className="px-3 py-3 text-sm text-gray-900">
+                      <div className="max-w-[200px] truncate">{contrato.titulo}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {contrato.fornecedor_nome || '-'}
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <div className="max-w-[120px] truncate">{contrato.fornecedor_nome || '-'}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500 capitalize">
                       {contrato.tipo}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(contrato.valor_total)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
                       <div className="flex flex-col">
                         <span>{formatDate(contrato.data_inicio)}</span>
                         {contrato.data_fim && <span className="text-xs text-gray-400">até {formatDate(contrato.data_fim)}</span>}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       {getStatusBadge(contrato.status)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getPrioridadeBadge(contrato.prioridade)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
+                    <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-1">
                         <button
                           onClick={() => handleViewDetails(contrato)}
-                          className="text-blue-600 hover:text-blue-900"
+                          className="p-1 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
                           title="Ver detalhes"
                         >
-                          <Eye size={18} />
+                          <Eye size={16} />
                         </button>
                         {canEdit && (
                           <button
                             onClick={() => handleEdit(contrato)}
-                            className="text-green-600 hover:text-green-900"
+                            className="p-1 text-green-600 hover:text-green-900 hover:bg-green-50 rounded"
                             title="Editar"
                           >
-                            <Pencil size={18} />
+                            <Pencil size={16} />
                           </button>
                         )}
                         {canDelete && (
                           <button
                             onClick={() => handleDeleteContrato(contrato.id)}
-                            className="text-red-600 hover:text-red-900"
+                            className="p-1 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
                             title="Excluir"
                           >
-                            <Trash2 size={18} />
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>

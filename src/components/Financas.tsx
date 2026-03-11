@@ -881,28 +881,28 @@ const FinancasContent: React.FC = () => {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Descrição
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Valor
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Data
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Rubrica
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Departamento
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                   Ações
                 </th>
               </tr>
@@ -911,93 +911,89 @@ const FinancasContent: React.FC = () => {
               {currentItems.length > 0 ? (
                 currentItems.map((despesa) => (
                   <tr key={despesa.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-3">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-blue-100 rounded-md">
-                          <FileText className="h-5 w-5 text-blue-600" />
+                        <div className="flex-shrink-0 h-8 w-8 flex items-center justify-center bg-blue-100 rounded-md">
+                          <FileText className="h-4 w-4 text-blue-600" />
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{despesa.descricao}</div>
-                          <div className="text-sm text-gray-500">{despesa.id.substring(0, 8)}</div>
+                        <div className="ml-3">
+                          <div className="text-sm font-medium text-gray-900 max-w-[200px] truncate">{despesa.descricao}</div>
+                          <div className="text-xs text-gray-500">{despesa.id.substring(0, 8)}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-3 whitespace-nowrap">
                       <div className="text-sm text-gray-900 font-medium">
                         {formatCurrency(despesa.valor)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-500">
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="text-xs text-gray-500">
                         {formatDate(despesa.created_at)}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="text-sm text-gray-900 max-w-[120px] truncate">
                         {despesa.rubrica?.nome || 'N/A'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {despesa.usuario?.departamento?.nome || 'N/A'}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          despesa.status === 'paga' 
-                            ? 'bg-green-100 text-green-800' 
-                            : despesa.status === 'negada' 
-                              ? 'bg-red-100 text-red-800' 
-                              : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {despesa.status === 'paga' 
-                            ? 'Pago' 
-                            : despesa.status === 'negada' 
-                              ? 'Negado' 
-                              : 'Pendente_Gestor'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => {
-                              setSelectedDespesa(despesa);
-                              setShowDetailsModal(true);
-                            }}
-                            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                          >
-                            <Eye className="h-3 w-3 mr-1" />
-                            Detalhes
-                          </button>
-                          <button
-                            onClick={() => handlePagarDespesa(despesa.id)}
-                            disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
-                            className={`inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white ${
-                              despesa.status === 'paga' || despesa.status === 'negada'
-                                ? 'bg-gray-400 cursor-not-allowed'
-                                : 'bg-green-600 hover:bg-green-700 focus:ring-green-500'
-                            } focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50`}
-                          >
-                            <DollarSign className="h-3 w-3 mr-1" />
-                            {despesa.status === 'paga' ? 'Pago' : 'Pagar'}
-                          </button>
-                          <button
-                            onClick={() => despesa.status === 'negada' ? null : handleOpenRejectionModal(despesa)}
-                            disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
-                            className={`inline-flex items-center px-3 py-1.5 border ${
-                              despesa.status === 'paga' || despesa.status === 'negada'
-                                ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:ring-red-500'
-                            } shadow-sm text-xs font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50`}
-                          >
-                            <XCircle className={`h-3 w-3 mr-1 ${
-                              despesa.status === 'paga' || despesa.status === 'negada' 
-                                ? 'text-gray-400' 
-                                : 'text-red-500'
-                            }`} />
-                            {despesa.status === 'negada' ? 'Negado' : 'Rejeitar'}
-                          </button>
-                        </div>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <div className="text-sm text-gray-900 max-w-[120px] truncate">
+                        {despesa.usuario?.departamento?.nome || 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        despesa.status === 'paga' 
+                          ? 'bg-green-100 text-green-800' 
+                          : despesa.status === 'negada' 
+                            ? 'bg-red-100 text-red-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {despesa.status === 'paga' 
+                          ? 'Pago' 
+                          : despesa.status === 'negada' 
+                            ? 'Negado' 
+                            : 'Pendente'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-1">
+                        <button
+                          onClick={() => {
+                            setSelectedDespesa(despesa);
+                            setShowDetailsModal(true);
+                          }}
+                          className="p-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
+                          title="Ver detalhes"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handlePagarDespesa(despesa.id)}
+                          disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
+                          className={`p-1.5 rounded ${
+                            despesa.status === 'paga' || despesa.status === 'negada'
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-green-600 hover:text-green-900 hover:bg-green-50'
+                          } disabled:opacity-50`}
+                          title={despesa.status === 'paga' ? 'Pago' : 'Pagar'}
+                        >
+                          <DollarSign className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => despesa.status === 'negada' ? null : handleOpenRejectionModal(despesa)}
+                          disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
+                          className={`p-1.5 rounded ${
+                            despesa.status === 'paga' || despesa.status === 'negada'
+                              ? 'text-gray-400 cursor-not-allowed'
+                              : 'text-red-600 hover:text-red-900 hover:bg-red-50'
+                          } disabled:opacity-50`}
+                          title={despesa.status === 'negada' ? 'Negado' : 'Rejeitar'}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

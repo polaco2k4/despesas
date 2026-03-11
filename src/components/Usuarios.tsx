@@ -257,25 +257,25 @@ const Usuarios: React.FC = () => {
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Nome
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Email
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Departamento
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Perfil
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Data de Criação
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                   Ações
                 </th>
               </tr>
@@ -284,18 +284,20 @@ const Usuarios: React.FC = () => {
               {currentRecords.length > 0 ? (
                 currentRecords.map((usuario) => (
                   <tr key={usuario.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {usuario.nome}
+                    <td className="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <div className="max-w-[150px] truncate">{usuario.nome}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {usuario.email}
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <div className="max-w-[180px] truncate">{usuario.email}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {usuario.role === 'adm_area' && usuario.departamentos && usuario.departamentos.length > 0
-                        ? usuario.departamentos.map(d => d.nome).join(', ')
-                        : usuario.departamento?.nome || '-'}
+                    <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-500">
+                      <div className="max-w-[150px] truncate">
+                        {usuario.role === 'adm_area' && usuario.departamentos && usuario.departamentos.length > 0
+                          ? usuario.departamentos.map(d => d.nome).join(', ')
+                          : usuario.departamento?.nome || '-'}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td className="px-3 py-3 whitespace-nowrap text-sm">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         usuario.role === 'admin' ? 'bg-blue-100 text-blue-800' :
                         usuario.role === 'gestor' ? 'bg-green-100 text-green-800' :
@@ -305,29 +307,33 @@ const Usuarios: React.FC = () => {
                         {getRoleLabel(usuario.role)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
                       {new Date(usuario.created_at).toLocaleDateString('pt-BR')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
-                        onClick={() => handleEditUsuario(usuario)}
-                        className="text-blue-600 hover:text-blue-900 mr-4"
-                      >
-                        <Edit size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteUsuario(usuario.id)}
-                        className="text-red-600 hover:text-red-900"
-                        disabled={usuario.role === 'admin'}
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                    <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end space-x-1">
+                        <button
+                          onClick={() => handleEditUsuario(usuario)}
+                          className="p-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
+                          title="Editar"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUsuario(usuario.id)}
+                          className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={usuario.role === 'admin'}
+                          title="Excluir"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-gray-500">
                     Nenhum usuário encontrado.
                   </td>
                 </tr>
