@@ -19,7 +19,8 @@ import {
   FolderOpen,
   Folder,
   Car,
-  ClipboardList
+  ClipboardList,
+  FileSignature
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -49,6 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { id: 'financas', label: 'Finanças', icon: DollarSign, roles: ['admin', 'gestor'] },
     { id: 'frotas', label: 'Gestão de Frotas', icon: Car, roles: ['admin', 'gestor', 'colaborador'] },
     { id: 'actas', label: 'Actas e Reuniões', icon: ClipboardList, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },
+    { id: 'contratos', label: 'Contratos', icon: FileSignature, roles: ['admin', 'gestor', 'adm_area'] },
     { id: 'relatorios', label: 'Relatórios', icon: FileText, roles: ['admin', 'gestor', 'adm_area'] },
     { id: 'usuarios', label: 'Utilizadores', icon: Users, roles: ['admin'] },
     { id: 'configuracoes', label: 'Configurações', icon: Settings, roles: ['admin', 'gestor', 'colaborador', 'adm_area'] },

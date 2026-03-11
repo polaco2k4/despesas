@@ -358,6 +358,34 @@ export const notificacoesAPI = {
     fetchAPI<{ count: number }>(`/notificacoes/usuario/${usuarioId}/nao-lidas`),
 };
 
+export const contratosAPI = {
+  getAll: (filters?: { status?: string; tipo?: string; departamento_id?: string; fornecedor_id?: string }) => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, String(value));
+        }
+      });
+    }
+    const queryString = params.toString();
+    return fetchAPI<any[]>(`/contratos${queryString ? `?${queryString}` : ''}`);
+  },
+  getById: (id: string) => fetchAPI<any>(`/contratos/${id}`),
+  getStats: () => fetchAPI<any>('/contratos/stats'),
+  create: (data: any) => fetchAPI<any>('/contratos', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: string, data: any) => fetchAPI<any>(`/contratos/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: string) => fetchAPI<void>(`/contratos/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
 export interface DocumentoFilters {
   categoria?: string;
   departamento_id?: string;

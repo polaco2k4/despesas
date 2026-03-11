@@ -20,6 +20,7 @@ import documentosRoutes from './routes/documentosRoutes.js';
 import expedientesRoutes from './routes/expedientesRoutes.js';
 import frotasRoutes from './routes/frotas.js';
 import actasRoutes from './routes/actas.js';
+import contratosRoutes from './routes/contratos.js';
 
 dotenv.config();
 
@@ -78,6 +79,7 @@ app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/frotas', frotasRoutes);
 app.use('/api/actas', actasRoutes);
+app.use('/api/contratos', contratosRoutes);
 
 console.log('🔍 Debug - Routes loaded:');
 console.log('- notificacoesRoutes:', !!notificacoesRoutes);
@@ -100,6 +102,7 @@ app.get('/', (req, res) => {
       dashboard: '/api/dashboard',
       frotas: '/api/frotas',
       actas: '/api/actas',
+      contratos: '/api/contratos',
       health: '/api/health'
     }
   });
