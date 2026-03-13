@@ -255,7 +255,7 @@ export const aprovacoesAPI = {
 export const fornecedoresAPI = {
   getAll: () => fetchAPI<any[]>('/fornecedores'),
   
-  create: (data: { nome: string; nif?: string; contacto?: string; email?: string }) =>
+  create: (data: { nome: string; nif?: string; telefone?: string; email?: string; endereco?: string; categoria?: string; status?: string }) =>
     fetchAPI<any>('/fornecedores', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -269,6 +269,41 @@ export const fornecedoresAPI = {
   
   delete: (id: string) =>
     fetchAPI<void>(`/fornecedores/${id}`, {
+      method: 'DELETE',
+    }),
+
+  addDocumento: async (fornecedorId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('documento', file);
+    return fetchAPI<any>(`/fornecedores/${fornecedorId}/documentos`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  removeDocumento: (fornecedorId: string, documentoId: string) =>
+    fetchAPI<void>(`/fornecedores/${fornecedorId}/documentos/${documentoId}`, {
+      method: 'DELETE',
+    }),
+};
+
+export const categoriasFornecedoresAPI = {
+  getAll: () => fetchAPI<any[]>('/categorias-fornecedores'),
+  
+  create: (data: { nome: string; descricao?: string }) =>
+    fetchAPI<any>('/categorias-fornecedores', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: string, data: { nome?: string; descricao?: string }) =>
+    fetchAPI<any>(`/categorias-fornecedores/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id: string) =>
+    fetchAPI<void>(`/categorias-fornecedores/${id}`, {
       method: 'DELETE',
     }),
 };

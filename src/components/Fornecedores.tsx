@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { fornecedoresAPI } from '../lib/backendApi';
+import { fornecedoresAPI, categoriasFornecedoresAPI } from '../lib/backendApi';
 import type { Fornecedor } from '../data/mockData';
 import { 
   Plus, 
@@ -11,7 +11,6 @@ import {
   Building,
   Mail,
   Phone,
-  MapPin,
   FileText,
   CheckCircle,
   XCircle,
@@ -33,6 +32,7 @@ const Fornecedores: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedFornecedor, setSelectedFornecedor] = useState<Fornecedor | null>(null);
+  const [editingFornecedorId, setEditingFornecedorId] = useState<string | null>(null);
   const [newFornecedor, setNewFornecedor] = useState({
     nome: '',
     email: '',
@@ -45,9 +45,20 @@ const Fornecedores: React.FC = () => {
   
   const [uploadingFile, setUploadingFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [activeTab, setActiveTab] = useState<'fornecedores' | 'categorias'>('fornecedores');
+  
+  // Categories state
+  const [categoriasDB, setCategoriasDB] = useState<any[]>([]);
+  const [showCategoriaModal, setShowCategoriaModal] = useState(false);
+  const [editingCategoriaId, setEditingCategoriaId] = useState<string | null>(null);
+  const [newCategoria, setNewCategoria] = useState({
+    nome: '',
+    descricao: ''
+  });
 
   useEffect(() => {
     fetchData();
+    fetchCategorias();
   }, []);
 
   const fetchData = async () => {
@@ -61,13 +72,27 @@ const Fornecedores: React.FC = () => {
     }
   };
 
+  const fetchCategorias = async () => {
+    try {
+      const categoriasData = await categoriasFornecedoresAPI.getAll();
+      setCategoriasDB(categoriasData);
+    } catch (error) {
+      console.error('Error fetching categorias:', error);
+    }
+  };
+
   const handleCreateFornecedor = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
-      await fornecedoresAPI.create(newFornecedor);
+      if (editingFornecedorId) {
+        await fornecedoresAPI.update(editingFornecedorId, newFornecedor);
+      } else {
+        await fornecedoresAPI.create(newFornecedor);
+      }
       
       setShowCreateModal(false);
+      setEditingFornecedorId(null);
       setNewFornecedor({
         nome: '',
         email: '',
@@ -78,8 +103,10 @@ const Fornecedores: React.FC = () => {
         status: 'ativo'
       });
       await fetchData();
-    } catch (error) {
-      console.error('Error creating fornecedor:', error);
+    } catch (error: any) {
+      console.error('Error creating/updating fornecedor:', error);
+      const errorMessage = error?.message || 'Erro ao criar/atualizar fornecedor';
+      alert(errorMessage);
     }
   };
 
@@ -98,8 +125,51 @@ const Fornecedores: React.FC = () => {
       try {
         await fornecedoresAPI.delete(id);
         await fetchData();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting fornecedor:', error);
+        const errorMessage = error?.message || 'Erro ao deletar fornecedor';
+        if (error?.message.includes('foreign key constraint')) {
+          alert('Não é possível deletar este fornecedor pois ele está relacionado a outros registros.');
+        } else {
+          alert(errorMessage);
+        }
+      }
+    }
+  };
+
+  const handleCreateCategoria = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      if (editingCategoriaId) {
+        await categoriasFornecedoresAPI.update(editingCategoriaId, newCategoria);
+      } else {
+        await categoriasFornecedoresAPI.create(newCategoria);
+      }
+      
+      setShowCategoriaModal(false);
+      setEditingCategoriaId(null);
+      setNewCategoria({
+        nome: '',
+        descricao: ''
+      });
+      await fetchCategorias();
+    } catch (error: any) {
+      console.error('Error creating/updating categoria:', error);
+      const errorMessage = error?.message || 'Erro ao criar/atualizar categoria';
+      alert(errorMessage);
+    }
+  };
+
+  const handleDeleteCategoria = async (id: string) => {
+    if (confirm('Tem certeza que deseja apagar esta categoria?')) {
+      try {
+        await categoriasFornecedoresAPI.delete(id);
+        await fetchCategorias();
+      } catch (error: any) {
+        console.error('Error deleting categoria:', error);
+        const errorMessage = error?.message || 'Erro ao deletar categoria';
+        alert(errorMessage);
       }
     }
   };
@@ -175,8 +245,6 @@ const Fornecedores: React.FC = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentFornecedores = filteredFornecedores.slice(startIndex, endIndex);
 
-  const categorias = [...new Set(fornecedores.map(f => f.categoria))];
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -190,7 +258,7 @@ const Fornecedores: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900">Fornecedores</h1>
-        {canManageFornecedores && (
+        {canManageFornecedores && activeTab === 'fornecedores' && (
           <button
             onClick={() => setShowCreateModal(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
@@ -201,228 +269,347 @@ const Fornecedores: React.FC = () => {
         )}
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Pesquisar</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                placeholder="Pesquisar fornecedores..."
-                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Todos os status</option>
-              <option value="ativo">Ativo</option>
-              <option value="inativo">Inativo</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-            <select
-              value={categoriaFilter}
-              onChange={(e) => {
-                setCategoriaFilter(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Todas as categorias</option>
-              {categorias.map((categoria) => (
-                <option key={categoria} value={categoria}>
-                  {categoria}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('fornecedores')}
+            className={`${
+              activeTab === 'fornecedores'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}
+          >
+            Fornecedores
+          </button>
+          <button
+            onClick={() => setActiveTab('categorias')}
+            className={`${
+              activeTab === 'categorias'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors`}
+          >
+            Categorias
+          </button>
+        </nav>
       </div>
 
-      {/* Fornecedores Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredFornecedores.length === 0 ? (
-          <div className="col-span-full text-center py-12 text-gray-500">
-            Nenhum fornecedor encontrado
-          </div>
-        ) : (
-          currentFornecedores.map((fornecedor) => (
-            <div key={fornecedor.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-blue-50 rounded-lg">
-                      <Building className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {fornecedor.nome}
-                      </h3>
-                      <p className="text-sm text-gray-500">{fornecedor.categoria}</p>
-                    </div>
-                  </div>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    fornecedor.status === 'ativo' 
-                      ? 'text-green-600 bg-green-50' 
-                      : 'text-red-600 bg-red-50'
-                  }`}>
-                    {fornecedor.status === 'ativo' ? (
-                      <>
-                        <CheckCircle size={12} className="mr-1" />
-                        Ativo
-                      </>
-                    ) : (
-                      <>
-                        <XCircle size={12} className="mr-1" />
-                        Inativo
-                      </>
-                    )}
-                  </span>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Mail size={14} className="mr-2" />
-                    {fornecedor.email}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Phone size={14} className="mr-2" />
-                    {fornecedor.telefone}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <FileText size={14} className="mr-2" />
-                    NIF: {fornecedor.nif}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                  <button
-                    onClick={() => {
-                      setSelectedFornecedor(fornecedor);
-                      setShowDetailModal(true);
+      {/* Fornecedores Tab Content */}
+      {activeTab === 'fornecedores' && (
+        <>
+          {/* Filters */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Pesquisar</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setCurrentPage(1);
                     }}
-                    className="text-blue-600 hover:text-blue-700 flex items-center space-x-1"
-                  >
-                    <Eye size={16} />
-                    <span>Ver Detalhes</span>
-                  </button>
-                  
-                  {canManageFornecedores && (
-                    <div className="flex items-center space-x-2">
+                    placeholder="Pesquisar fornecedores..."
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Todos os status</option>
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                <select
+                  value={categoriaFilter}
+                  onChange={(e) => {
+                    setCategoriaFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Todas as categorias</option>
+                  {categoriasDB.map((categoria) => (
+                    <option key={categoria.id} value={categoria.nome}>
+                      {categoria.nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Fornecedores Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredFornecedores.length === 0 ? (
+              <div className="col-span-full text-center py-12 text-gray-500">
+                Nenhum fornecedor encontrado
+              </div>
+            ) : (
+              currentFornecedores.map((fornecedor) => (
+                <div key={fornecedor.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
+                  <div className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div className="p-2 bg-blue-50 rounded-lg">
+                          <Building className="h-6 w-6 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {fornecedor.nome}
+                          </h3>
+                          <p className="text-sm text-gray-500">{fornecedor.categoria}</p>
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        fornecedor.status === 'ativo' 
+                          ? 'text-green-600 bg-green-50' 
+                          : 'text-red-600 bg-red-50'
+                      }`}>
+                        {fornecedor.status === 'ativo' ? (
+                          <>
+                            <CheckCircle size={12} className="mr-1" />
+                            Ativo
+                          </>
+                        ) : (
+                          <>
+                            <XCircle size={12} className="mr-1" />
+                            Inativo
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Mail size={14} className="mr-2" />
+                        {fornecedor.email}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Phone size={14} className="mr-2" />
+                        {fornecedor.telefone}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <FileText size={14} className="mr-2" />
+                        NIF: {fornecedor.nif}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
                       <button
                         onClick={() => {
-                          // Set the form with current supplier data for editing
-                          setNewFornecedor({
-                            nome: fornecedor.nome,
-                            email: fornecedor.email,
-                            telefone: fornecedor.telefone,
-                            endereco: fornecedor.endereco,
-                            nif: fornecedor.nif,
-                            categoria: fornecedor.categoria,
-                            status: fornecedor.status
-                          });
-                          setShowCreateModal(true);
+                          setSelectedFornecedor(fornecedor);
+                          setShowDetailModal(true);
                         }}
-                        className="text-yellow-600 hover:text-yellow-700 p-1 rounded"
-                        title="Editar fornecedor"
+                        className="text-blue-600 hover:text-blue-700 flex items-center space-x-1"
+                      >
+                        <Eye size={16} />
+                        <span>Ver Detalhes</span>
+                      </button>
+                      
+                      {canManageFornecedores && (
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => {
+                              setEditingFornecedorId(fornecedor.id);
+                              setNewFornecedor({
+                                nome: fornecedor.nome,
+                                email: fornecedor.email,
+                                telefone: fornecedor.telefone,
+                                endereco: fornecedor.endereco,
+                                nif: fornecedor.nif,
+                                categoria: fornecedor.categoria,
+                                status: fornecedor.status
+                              });
+                              setShowCreateModal(true);
+                            }}
+                            className="text-yellow-600 hover:text-yellow-700 p-1 rounded"
+                            title="Editar fornecedor"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(fornecedor.id, fornecedor.status)}
+                            className={`p-1 rounded ${
+                              fornecedor.status === 'ativo'
+                                ? 'text-red-600 hover:text-red-700'
+                                : 'text-green-600 hover:text-green-700'
+                            }`}
+                            title={fornecedor.status === 'ativo' ? 'Desativar' : 'Ativar'}
+                          >
+                            {fornecedor.status === 'ativo' ? <XCircle size={16} /> : <CheckCircle size={16} />}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFornecedor(fornecedor.id)}
+                            className="text-red-600 hover:text-red-700 p-1 rounded"
+                            title="Apagar fornecedor"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="bg-white rounded-lg shadow p-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Mostrando <span className="font-medium">{startIndex + 1}</span> a{' '}
+                  <span className="font-medium">{Math.min(endIndex, filteredFornecedores.length)}</span> de{' '}
+                  <span className="font-medium">{filteredFornecedores.length}</span> resultados
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Anterior
+                  </button>
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${
+                          currentPage === page
+                            ? 'bg-blue-600 text-white'
+                            : 'border border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Próximo
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Categorias Tab Content */}
+      {activeTab === 'categorias' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-medium text-gray-900">Gestão de Categorias</h3>
+            {canManageFornecedores && (
+              <button
+                onClick={() => setShowCategoriaModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+              >
+                <Plus size={20} />
+                <span>Nova Categoria</span>
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            {categoriasDB.length > 0 ? (
+              categoriasDB.map((categoria) => (
+                <div key={categoria.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
+                  <div 
+                    className="flex-1 cursor-pointer"
+                    onClick={() => {
+                      setCategoriaFilter(categoria.nome);
+                      setActiveTab('fornecedores');
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <h4 className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors">{categoria.nome}</h4>
+                    {categoria.descricao && (
+                      <p className="text-xs text-gray-500 mt-1">{categoria.descricao}</p>
+                    )}
+                    <span className="text-xs text-gray-400 mt-1 block">
+                      {fornecedores.filter(f => f.categoria === categoria.nome).length} fornecedor(es)
+                    </span>
+                  </div>
+                  
+                  {canManageFornecedores && (
+                    <div className="flex items-center space-x-2 ml-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingCategoriaId(categoria.id);
+                          setNewCategoria({
+                            nome: categoria.nome,
+                            descricao: categoria.descricao || ''
+                          });
+                          setShowCategoriaModal(true);
+                        }}
+                        className="text-yellow-600 hover:text-yellow-700 p-2 rounded"
+                        title="Editar categoria"
                       >
                         <Edit size={16} />
                       </button>
                       <button
-                        onClick={() => handleToggleStatus(fornecedor.id, fornecedor.status)}
-                        className={`p-1 rounded ${
-                          fornecedor.status === 'ativo'
-                            ? 'text-red-600 hover:text-red-700'
-                            : 'text-green-600 hover:text-green-700'
-                        }`}
-                        title={fornecedor.status === 'ativo' ? 'Desativar' : 'Ativar'}
-                      >
-                        {fornecedor.status === 'ativo' ? <XCircle size={16} /> : <CheckCircle size={16} />}
-                      </button>
-                      <button
-                        onClick={() => handleDeleteFornecedor(fornecedor.id)}
-                        className="text-red-600 hover:text-red-700 p-1 rounded"
-                        title="Apagar fornecedor"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCategoria(categoria.id);
+                        }}
+                        className="text-red-600 hover:text-red-700 p-2 rounded"
+                        title="Apagar categoria"
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Mostrando <span className="font-medium">{startIndex + 1}</span> a{' '}
-              <span className="font-medium">{Math.min(endIndex, filteredFornecedores.length)}</span> de{' '}
-              <span className="font-medium">{filteredFornecedores.length}</span> resultados
-            </div>
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Anterior
-              </button>
-              <div className="flex items-center space-x-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <Building className="mx-auto h-12 w-12 text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">Nenhuma categoria encontrada</p>
+                {canManageFornecedores && (
                   <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-3 py-1 rounded-md text-sm font-medium ${
-                      currentPage === page
-                        ? 'bg-blue-600 text-white'
-                        : 'border border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                    }`}
+                    onClick={() => setShowCategoriaModal(true)}
+                    className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
                   >
-                    {page}
+                    Criar primeira categoria
                   </button>
-                ))}
+                )}
               </div>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Próximo
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* Create/Edit Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-screen overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Novo Fornecedor</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingFornecedorId ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+            </h2>
             
             <form onSubmit={handleCreateFornecedor} className="space-y-4">
               <div>
@@ -501,12 +688,20 @@ const Fornecedores: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  list="categorias-list"
                   value={newFornecedor.categoria}
                   onChange={(e) => setNewFornecedor({ ...newFornecedor, categoria: e.target.value })}
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Categoria do fornecedor"
+                  placeholder="Digite ou selecione uma categoria"
                 />
+                <datalist id="categorias-list">
+                  {categoriasDB.map((categoria) => (
+                    <option key={categoria.id} value={categoria.nome}>
+                      {categoria.descricao}
+                    </option>
+                  ))}
+                </datalist>
               </div>
 
               <div className="flex space-x-3 pt-4">
@@ -514,12 +709,13 @@ const Fornecedores: React.FC = () => {
                   type="submit"
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition-colors"
                 >
-                  Criar Fornecedor
+                  {editingFornecedorId ? 'Atualizar Fornecedor' : 'Criar Fornecedor'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false);
+                    setEditingFornecedorId(null);
                     setNewFornecedor({
                       nome: '',
                       email: '',
@@ -715,6 +911,69 @@ const Fornecedores: React.FC = () => {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Categoria Modal */}
+      {showCategoriaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              {editingCategoriaId ? 'Editar Categoria' : 'Nova Categoria'}
+            </h2>
+            
+            <form onSubmit={handleCreateCategoria} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome
+                </label>
+                <input
+                  type="text"
+                  value={newCategoria.nome}
+                  onChange={(e) => setNewCategoria({ ...newCategoria, nome: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Nome da categoria"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Descrição
+                </label>
+                <textarea
+                  value={newCategoria.descricao}
+                  onChange={(e) => setNewCategoria({ ...newCategoria, descricao: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Descrição da categoria (opcional)"
+                />
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition-colors"
+                >
+                  {editingCategoriaId ? 'Atualizar Categoria' : 'Criar Categoria'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCategoriaModal(false);
+                    setEditingCategoriaId(null);
+                    setNewCategoria({
+                      nome: '',
+                      descricao: ''
+                    });
+                  }}
+                  className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 rounded-md transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

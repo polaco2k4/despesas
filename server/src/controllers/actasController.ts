@@ -114,6 +114,12 @@ export const getReuniaoById = async (req: Request, res: Response) => {
       ORDER BY rp.tipo DESC, u.nome
     `;
     
+    const participantesExternosQuery = `
+      SELECT * FROM reunioes_participantes_externos
+      WHERE reuniao_id = @id
+      ORDER BY nome
+    `;
+    
     const actasQuery = `
       SELECT 
         a.*,
@@ -125,9 +131,10 @@ export const getReuniaoById = async (req: Request, res: Response) => {
       WHERE a.reuniao_id = @id
     `;
     
-    const [reuniaoResult, participantesResult, actasResult] = await Promise.all([
+    const [reuniaoResult, participantesResult, participantesExternosResult, actasResult] = await Promise.all([
       executeQuery(reuniaoQuery, { id }),
       executeQuery(participantesQuery, { id }),
+      executeQuery(participantesExternosQuery, { id }),
       executeQuery(actasQuery, { id })
     ]);
     
@@ -138,6 +145,7 @@ export const getReuniaoById = async (req: Request, res: Response) => {
     const reuniao = {
       ...reuniaoResult[0],
       participantes: participantesResult,
+      participantes_externos: participantesExternosResult,
       actas: actasResult
     };
     
@@ -174,22 +182,18 @@ export const createReuniao = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Campos obrigatórios: titulo, tipo, data_hora' });
     }
     
-    // Format dates for SQL Server
+    // Format dates for SQL Server (keep WAT timezone, no UTC conversion)
     let formattedDate = data_hora;
     if (typeof data_hora === 'string') {
-      const dateObj = new Date(data_hora);
-      if (!isNaN(dateObj.getTime())) {
-        formattedDate = dateObj.toISOString().slice(0, 19).replace('T', ' ');
-      }
+      // Format: "2026-03-14T06:30" -> "2026-03-14 06:30:00"
+      formattedDate = data_hora.replace('T', ' ') + ':00';
     }
     
     let formattedDateFim = null;
     if (data_hora_fim) {
       if (typeof data_hora_fim === 'string') {
-        const dateObj = new Date(data_hora_fim);
-        if (!isNaN(dateObj.getTime())) {
-          formattedDateFim = dateObj.toISOString().slice(0, 19).replace('T', ' ');
-        }
+        // Format: "2026-03-14T08:30" -> "2026-03-14 08:30:00"
+        formattedDateFim = data_hora_fim.replace('T', ' ') + ':00';
       } else {
         formattedDateFim = data_hora_fim;
       }
@@ -371,11 +375,19 @@ export const createReuniao = async (req: Request, res: Response) => {
       }
     }));
     
-    // Format dates to ISO 8601 (YYYY-MM-DDTHH:mm:ssZ)
-    const startDate = new Date(completeReuniao[0].data_hora).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    // Send dates as stored in database (WAT timezone)
+    // Database stores: "2026-03-14 06:30:00" (WAT)
+    // Send as: "2026-03-14 06:30:00" (same format)
+    const startDate = completeReuniao[0].data_hora;
     const endDate = completeReuniao[0].data_hora_fim 
-      ? new Date(completeReuniao[0].data_hora_fim).toISOString().replace(/\.\d{3}Z$/, 'Z')
-      : new Date(new Date(completeReuniao[0].data_hora).getTime() + 3600000).toISOString().replace(/\.\d{3}Z$/, 'Z'); // +1 hour default
+      ? completeReuniao[0].data_hora_fim
+      : (() => {
+          // Add 1 hour to start time for default end time
+          const [datePart, timePart] = completeReuniao[0].data_hora.split(' ');
+          const [hours, minutes] = timePart.split(':');
+          const newHours = String(parseInt(hours) + 1).padStart(2, '0');
+          return `${datePart} ${newHours}:${minutes}:00`;
+        })();
     
     console.log('🔍 Debug - Start Date:', startDate);
     console.log('🔍 Debug - End Date:', endDate);
@@ -448,7 +460,8 @@ export const updateReuniao = async (req: Request, res: Response) => {
       status,
       agenda,
       observacoes,
-      participantes
+      participantes,
+      participantes_externos
     } = req.body;
     
     const userId = req.headers['x-user-id'] as string;
@@ -523,25 +536,21 @@ export const updateReuniao = async (req: Request, res: Response) => {
     }
     if (data_hora !== undefined) {
       fields.push('data_hora = @data_hora');
-      // Format date for SQL Server
+      // Format date for SQL Server (keep WAT timezone, no UTC conversion)
       let formattedDate = data_hora;
       if (typeof data_hora === 'string') {
-        const dateObj = new Date(data_hora);
-        if (!isNaN(dateObj.getTime())) {
-          formattedDate = dateObj.toISOString().slice(0, 19).replace('T', ' ');
-        }
+        // Format: "2026-03-14T06:30" -> "2026-03-14 06:30:00"
+        formattedDate = data_hora.replace('T', ' ') + ':00';
       }
       params.data_hora = formattedDate;
     }
     if (data_hora_fim !== undefined) {
       fields.push('data_hora_fim = @data_hora_fim');
-      // Format date for SQL Server
+      // Format date for SQL Server (keep WAT timezone, no UTC conversion)
       let formattedDateFim = data_hora_fim;
       if (data_hora_fim && typeof data_hora_fim === 'string') {
-        const dateObj = new Date(data_hora_fim);
-        if (!isNaN(dateObj.getTime())) {
-          formattedDateFim = dateObj.toISOString().slice(0, 19).replace('T', ' ');
-        }
+        // Format: "2026-03-14T08:30" -> "2026-03-14 08:30:00"
+        formattedDateFim = data_hora_fim.replace('T', ' ') + ':00';
       }
       params.data_hora_fim = formattedDateFim || null;
     }
@@ -566,7 +575,7 @@ export const updateReuniao = async (req: Request, res: Response) => {
       params.observacoes = observacoes;
     }
     
-    if (fields.length === 0 && !participantes) {
+    if (fields.length === 0 && !participantes && !participantes_externos) {
       return res.status(400).json({ error: 'Nenhum campo para atualizar' });
     }
     
@@ -684,6 +693,31 @@ export const updateReuniao = async (req: Request, res: Response) => {
             usuario_id: participante.usuario_id,
             tipo: participante.tipo || 'participante',
             presenca: participante.presenca || null
+          });
+        }
+      }
+    }
+    
+    // Update external participants if provided
+    if (participantes_externos !== undefined) {
+      await executeQuery('DELETE FROM reunioes_participantes_externos WHERE reuniao_id = @id', { id });
+      
+      if (participantes_externos.length > 0) {
+        console.log(`🌍 Updating ${participantes_externos.length} external participantes...`);
+        for (const externo of participantes_externos) {
+          const externosQuery = `
+            INSERT INTO reunioes_participantes_externos (reuniao_id, nome, email, empresa, cargo, telefone, tipo)
+            VALUES (@reuniao_id, @nome, @email, @empresa, @cargo, @telefone, @tipo)
+          `;
+          
+          await executeQuery(externosQuery, {
+            reuniao_id: id,
+            nome: externo.nome,
+            email: externo.email || null,
+            empresa: externo.empresa || null,
+            cargo: externo.cargo || null,
+            telefone: externo.telefone || null,
+            tipo: externo.tipo || 'convidado'
           });
         }
       }

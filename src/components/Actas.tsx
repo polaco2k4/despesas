@@ -37,6 +37,7 @@ interface Reuniao {
   total_participantes?: number;
   total_actas?: number;
   participantes?: any[];
+  participantes_externos?: ParticipanteExterno[];
   actas?: any[];
   created_at: string;
   updated_at: string;
@@ -228,7 +229,36 @@ const Actas: React.FC = () => {
   };
 
   const handleCreateReuniao = async () => {
+    // Validate that meeting date is not in the past
+    if (editingReuniao.data_hora) {
+      const meetingDate = new Date(editingReuniao.data_hora);
+      const now = new Date();
+      if (meetingDate < now) {
+        showAlert('Não é permitido criar reunião com data e hora anterior à data atual', 'error');
+        return;
+      }
+    }
+
+    // Validate that end date is not in the past
+    if (editingReuniao.data_hora_fim) {
+      const endDate = new Date(editingReuniao.data_hora_fim);
+      const now = new Date();
+      if (endDate < now) {
+        showAlert('A data de fim não deve ser anterior à data atual', 'error');
+        return;
+      }
+    }
+
     try {
+      const requestData = {
+        ...editingReuniao,
+        convocador_id: userProfile?.id,
+        participantes,
+        participantes_externos: participantesExternos
+      };
+      
+      console.log('📤 Enviando dados da reunião:', requestData);
+      
       const response = await fetch(`${API_URL}/actas/reunioes`, {
         method: 'POST',
         headers: {
@@ -236,12 +266,7 @@ const Actas: React.FC = () => {
           'x-user-id': userProfile?.id || '',
           'x-user-role': userProfile?.role || ''
         },
-        body: JSON.stringify({
-          ...editingReuniao,
-          convocador_id: userProfile?.id,
-          participantes,
-          participantes_externos: participantesExternos
-        })
+        body: JSON.stringify(requestData)
       });
       
       if (response.ok) {
@@ -271,6 +296,26 @@ const Actas: React.FC = () => {
   const handleUpdateReuniao = async () => {
     if (!selectedReuniao) return;
     
+    // Validate that meeting date is not in the past
+    if (editingReuniao.data_hora) {
+      const meetingDate = new Date(editingReuniao.data_hora);
+      const now = new Date();
+      if (meetingDate < now) {
+        showAlert('Não é permitido editar reunião com data e hora anterior à data atual', 'error');
+        return;
+      }
+    }
+
+    // Validate that end date is not in the past
+    if (editingReuniao.data_hora_fim) {
+      const endDate = new Date(editingReuniao.data_hora_fim);
+      const now = new Date();
+      if (endDate < now) {
+        showAlert('A data de fim não deve ser anterior à data atual', 'error');
+        return;
+      }
+    }
+
     try {
       // Check if user is only a participant (not creator or admin)
       const isCreator = editingReuniao.convocador_id === userProfile?.id;
@@ -703,6 +748,7 @@ const Actas: React.FC = () => {
               setShowReuniaoModal(true);
               setEditingReuniao({ status: 'agendada', tipo: 'ordinaria' });
               setParticipantes([]);
+              setParticipantesExternos([]);
               setIsEditing(false);
             }}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
@@ -749,44 +795,82 @@ const Actas: React.FC = () => {
       ) : (
         <>
           {activeTab === 'reunioes' && (
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
+            <div className="bg-white rounded-lg shadow overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 table-fixed">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Título</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data/Hora</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data/Hora Fim</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Participantes</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{width: '200px'}}>Título</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{width: '100px'}}>Tipo</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{width: '140px'}}>Data/Hora</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{width: '140px'}}>Data/Hora Fim</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{width: '100px'}}>Status</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase" style={{width: '80px'}}>Part.</th>
+                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase" style={{width: '100px'}}>Ações</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredReunioes.map((reuniao) => (
-                    <tr key={reuniao.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{reuniao.titulo}</div>
-                        {reuniao.local && <div className="text-sm text-gray-500">{reuniao.local}</div>}
+                    <tr 
+                      key={reuniao.id} 
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={async () => {
+                        // Load full meeting details including participants
+                        try {
+                          const response = await fetch(`${API_URL}/actas/reunioes/${reuniao.id}`, {
+                            headers: {
+                              'x-user-id': userProfile?.id || '',
+                              'x-user-role': userProfile?.role || ''
+                            }
+                          });
+                          if (response.ok) {
+                            const data = await response.json();
+                            setSelectedReuniao(data);
+                          } else {
+                            setSelectedReuniao(reuniao);
+                          }
+                        } catch (error) {
+                          console.error('Error loading meeting details:', error);
+                          setSelectedReuniao(reuniao);
+                        }
+                        setShowDetailModal(true);
+                      }}
+                    >
+                      <td className="px-4 py-4">
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {reuniao.titulo.length > 100 ? reuniao.titulo.substring(0, 100) + '...' : reuniao.titulo}
+                        </div>
+                        {reuniao.local && <div className="text-sm text-gray-500 truncate">{reuniao.local}</div>}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-900 capitalize">{reuniao.tipo}</span>
+                      <td className="px-3 py-4">
+                        <span className="text-sm text-gray-900 capitalize truncate">{reuniao.tipo}</span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(reuniao.data_hora).toLocaleString('pt-PT')}
+                      <td className="px-3 py-4 text-sm text-gray-900">
+                        {new Date(reuniao.data_hora).toLocaleString('pt-PT', { 
+                          day: '2-digit', 
+                          month: '2-digit', 
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {reuniao.data_hora_fim ? new Date(reuniao.data_hora_fim).toLocaleString('pt-PT') : 'N/A'}
+                      <td className="px-3 py-4 text-sm text-gray-900">
+                        {reuniao.data_hora_fim ? new Date(reuniao.data_hora_fim).toLocaleString('pt-PT', {
+                          day: '2-digit', 
+                          month: '2-digit', 
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-3 py-4">
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(reuniao.status)}`}>
                           {reuniao.status}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-3 py-4 text-sm text-gray-900 text-center">
                         {reuniao.total_participantes || 0}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={async () => {
                             // Load full meeting details including participants
@@ -816,7 +900,19 @@ const Actas: React.FC = () => {
                         <button
                           onClick={async () => {
                             setSelectedReuniao(reuniao);
-                            setEditingReuniao(reuniao);
+                            
+                            // Convert dates to correct format for datetime-local input
+                            const formatDateForInput = (dateStr: string) => {
+                              if (!dateStr) return '';
+                              // Handle both formats: "2026-03-14 07:30:00" and "2026-03-14T07:30:00.000Z"
+                              return dateStr.replace(' ', 'T').slice(0, 16);
+                            };
+                            
+                            setEditingReuniao({
+                              ...reuniao,
+                              data_hora: formatDateForInput(reuniao.data_hora),
+                              data_hora_fim: reuniao.data_hora_fim ? formatDateForInput(reuniao.data_hora_fim) : undefined
+                            });
                             setIsEditing(true);
                             
                             // Load participants and external participants for this meeting
@@ -1065,12 +1161,13 @@ const Actas: React.FC = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Título * (máx. 50 caracteres)</label>
                   <input
                     type="text"
                     value={editingReuniao.titulo || ''}
                     onChange={(e) => setEditingReuniao({ ...editingReuniao, titulo: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    maxLength={50}
                     required
                   />
                 </div>
@@ -1119,7 +1216,7 @@ const Actas: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Data/Hora Início *</label>
                     <input
                       type="datetime-local"
-                      value={editingReuniao.data_hora ? new Date(editingReuniao.data_hora).toISOString().slice(0, 16) : ''}
+                      value={editingReuniao.data_hora ? editingReuniao.data_hora.slice(0, 16) : ''}
                       onChange={(e) => setEditingReuniao({ ...editingReuniao, data_hora: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                       required
@@ -1130,7 +1227,7 @@ const Actas: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Data/Hora Fim</label>
                     <input
                       type="datetime-local"
-                      value={editingReuniao.data_hora_fim ? new Date(editingReuniao.data_hora_fim).toISOString().slice(0, 16) : ''}
+                      value={editingReuniao.data_hora_fim ? editingReuniao.data_hora_fim.slice(0, 16) : ''}
                       onChange={(e) => setEditingReuniao({ ...editingReuniao, data_hora_fim: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
@@ -1294,88 +1391,88 @@ const Actas: React.FC = () => {
 
                   {/* External participant form */}
                   {showExternalForm && (
-                    <div className="border border-gray-300 rounded-lg p-4 space-y-3 bg-gray-50">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
-                          <input
-                            type="text"
-                            value={externalParticipant.nome || ''}
-                            onChange={(e) => setExternalParticipant({ ...externalParticipant, nome: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                            placeholder="Nome completo"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
-                          <input
-                            type="email"
-                            value={externalParticipant.email || ''}
-                            onChange={(e) => setExternalParticipant({ ...externalParticipant, email: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                            placeholder="email@exemplo.com"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Empresa</label>
-                          <input
-                            type="text"
-                            value={externalParticipant.empresa || ''}
-                            onChange={(e) => setExternalParticipant({ ...externalParticipant, empresa: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                            placeholder="Nome da empresa"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
-                          <input
-                            type="text"
-                            value={externalParticipant.cargo || ''}
-                            onChange={(e) => setExternalParticipant({ ...externalParticipant, cargo: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                            placeholder="Cargo/Função"
-                          />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Telefone</label>
-                          <input
-                            type="text"
-                            value={externalParticipant.telefone || ''}
-                            onChange={(e) => setExternalParticipant({ ...externalParticipant, telefone: e.target.value })}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
-                            placeholder="+244 900 000 000"
-                          />
-                        </div>
+                  <div className="border border-gray-300 rounded-lg p-4 space-y-3 bg-gray-50">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Nome *</label>
+                        <input
+                          type="text"
+                          value={externalParticipant.nome || ''}
+                          onChange={(e) => setExternalParticipant({ ...externalParticipant, nome: e.target.value })}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="Nome completo"
+                        />
                       </div>
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowExternalForm(false);
-                            setExternalParticipant({});
-                          }}
-                          className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (externalParticipant.nome) {
-                              setParticipantesExternos([...participantesExternos, externalParticipant as ParticipanteExterno]);
-                              setExternalParticipant({});
-                              setShowExternalForm(false);
-                            } else {
-                              showAlert('Por favor, preencha o nome do participante externo', 'warning');
-                            }
-                          }}
-                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                          Adicionar
-                        </button>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={externalParticipant.email || ''}
+                          onChange={(e) => setExternalParticipant({ ...externalParticipant, email: e.target.value })}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="email@exemplo.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Empresa</label>
+                        <input
+                          type="text"
+                          value={externalParticipant.empresa || ''}
+                          onChange={(e) => setExternalParticipant({ ...externalParticipant, empresa: e.target.value })}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="Nome da empresa"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Cargo</label>
+                        <input
+                          type="text"
+                          value={externalParticipant.cargo || ''}
+                          onChange={(e) => setExternalParticipant({ ...externalParticipant, cargo: e.target.value })}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="Cargo/Função"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Telefone</label>
+                        <input
+                          type="text"
+                          value={externalParticipant.telefone || ''}
+                          onChange={(e) => setExternalParticipant({ ...externalParticipant, telefone: e.target.value })}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                          placeholder="+244 900 000 000"
+                        />
                       </div>
                     </div>
-                  )}
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowExternalForm(false);
+                          setExternalParticipant({});
+                        }}
+                        className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (externalParticipant.nome) {
+                            setParticipantesExternos([...participantesExternos, externalParticipant as ParticipanteExterno]);
+                            setExternalParticipant({});
+                            setShowExternalForm(false);
+                          } else {
+                            showAlert('Por favor, preencha o nome do participante externo', 'warning');
+                          }
+                        }}
+                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        Adicionar
+                      </button>
+                    </div>
+                  </div>
+                )}
                 </div>
 
                 <div>
@@ -1711,6 +1808,34 @@ const Actas: React.FC = () => {
                             }`}>
                               {p.tipo}
                             </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                )}
+
+                {/* Participantes Externos */}
+                {selectedReuniao.participantes_externos && selectedReuniao.participantes_externos.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Participantes Externos</label>
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <ul className="space-y-3">
+                        {selectedReuniao.participantes_externos.map((ext: any, idx: number) => (
+                          <li key={idx} className="border-b border-green-200 pb-2 last:border-0">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900">{ext.nome}</p>
+                                {ext.email && (
+                                  <p className="text-sm text-gray-600">{ext.email}</p>
+                                )}
+                                <div className="flex gap-3 mt-1 text-xs text-gray-500">
+                                  {ext.empresa && <span>🏢 {ext.empresa}</span>}
+                                  {ext.cargo && <span>💼 {ext.cargo}</span>}
+                                  {ext.telefone && <span>📞 {ext.telefone}</span>}
+                                </div>
+                              </div>
+                            </div>
                           </li>
                         ))}
                       </ul>
