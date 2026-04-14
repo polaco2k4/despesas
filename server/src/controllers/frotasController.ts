@@ -1,5 +1,70 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
+import { sanitizeSolicitacaoFields, detectMaliciousPatterns } from '../utils/sanitize.js';
+
+const WEBHOOK_URL = 'https://hook.eu2.make.com/vmglrak6t8op535e62b7rwo8cbbprrw8';
+
+const formatDateToPortugueseWAT = (date: Date | string | null | undefined): string => {
+  if (!date) {
+    console.log('⚠️ formatDateToPortugueseWAT: date is null/undefined');
+    return '';
+  }
+  
+  try {
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    
+    // Verificar se a data é válida
+    if (isNaN(dateObj.getTime())) {
+      console.log('⚠️ formatDateToPortugueseWAT: Invalid date:', date);
+      return '';
+    }
+    
+    // Formatar para WAT (West Africa Time - UTC+1)
+    const options: Intl.DateTimeFormatOptions = {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Africa/Lagos', // WAT timezone
+      hour12: false
+    };
+    
+    const formatted = new Intl.DateTimeFormat('pt-PT', options).format(dateObj);
+    const result = formatted.replace(',', '');
+    console.log(`✅ formatDateToPortugueseWAT: ${date} -> ${result}`);
+    return result;
+  } catch (error) {
+    console.error('❌ Error formatting date:', error, 'Date:', date);
+    return '';
+  }
+};
+
+const sendToWebhook = async (data: any) => {
+  try {
+    console.log('📤 Sending to webhook:', JSON.stringify(data, null, 2));
+    
+    const response = await fetch(WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data)
+    });
+    
+    const responseText = await response.text();
+    
+    if (!response.ok) {
+      console.error('❌ Webhook error:', response.status, response.statusText);
+      console.error('Response body:', responseText);
+    } else {
+      console.log('✅ Webhook sent successfully');
+      console.log('Response:', responseText);
+    }
+  } catch (error) {
+    console.error('❌ Error sending to webhook:', error);
+  }
+};
 
 export const getAllVeiculos = async (req: Request, res: Response) => {
   try {
@@ -632,10 +697,35 @@ export const getAllSolicitacoes = async (req: Request, res: Response) => {
 
 export const createSolicitacao = async (req: Request, res: Response) => {
   try {
-    const { destino, data_inicio, data_fim, numero_passageiros, tipo_viatura, motivo, observacoes } = req.body;
+    // Detectar padrões maliciosos nos campos de texto
+    const textFields = [req.body.destino, req.body.motivo, req.body.observacoes, req.body.tipo_viatura];
+    for (const field of textFields) {
+      if (field && detectMaliciousPatterns(field)) {
+        return res.status(400).json({ error: 'Conteúdo inválido detectado. Por favor, remova caracteres especiais ou código.' });
+      }
+    }
+    
+    // Sanitizar dados de entrada
+    const sanitizedData = sanitizeSolicitacaoFields(req.body);
+    const { destino, data_inicio, data_fim, numero_passageiros, tipo_viatura, motivo, observacoes } = sanitizedData;
     
     if (!destino || !data_inicio || !data_fim || !numero_passageiros || !motivo) {
       return res.status(400).json({ error: 'Campos obrigatórios: destino, data_inicio, data_fim, numero_passageiros, motivo' });
+    }
+
+    // Validar se a data de início não é anterior à data atual
+    const dataInicioObj = new Date(data_inicio);
+    const dataAtual = new Date();
+    dataAtual.setHours(0, 0, 0, 0); // Resetar horas para comparar apenas a data
+    
+    if (dataInicioObj < dataAtual) {
+      return res.status(400).json({ error: 'A data de início não pode ser anterior à data atual' });
+    }
+
+    // Validar se a data de fim não é anterior à data de início
+    const dataFimObj = new Date(data_fim);
+    if (dataFimObj < dataInicioObj) {
+      return res.status(400).json({ error: 'A data de fim não pode ser anterior à data de início' });
     }
 
     const query = `
@@ -660,7 +750,69 @@ export const createSolicitacao = async (req: Request, res: Response) => {
       status: 'pendente'
     });
     
-    return res.status(201).json(result[0]);
+    const solicitacao = result[0];
+    
+    // Buscar dados completos incluindo nome do solicitante e email do condutor
+    let webhookData = { ...solicitacao };
+    
+    // Buscar nome do solicitante
+    if (solicitacao.solicitante_id) {
+      const solicitanteQuery = `SELECT nome, email FROM usuarios WHERE id = @solicitante_id`;
+      const solicitanteResult = await executeQuery(solicitanteQuery, { solicitante_id: solicitacao.solicitante_id });
+      if (solicitanteResult.length > 0) {
+        webhookData.solicitante_nome = solicitanteResult[0].nome;
+        webhookData.solicitante_email = solicitanteResult[0].email;
+      }
+    }
+    
+    // Buscar dados do veículo atribuído se existir
+    if (solicitacao.veiculo_atribuido_id) {
+      const veiculoQuery = `SELECT matricula, marca, modelo FROM veiculos WHERE id = @veiculo_id`;
+      const veiculoResult = await executeQuery(veiculoQuery, { veiculo_id: solicitacao.veiculo_atribuido_id });
+      if (veiculoResult.length > 0) {
+        webhookData.veiculo_matricula = veiculoResult[0].matricula;
+        webhookData.veiculo_marca = veiculoResult[0].marca;
+        webhookData.veiculo_modelo = veiculoResult[0].modelo;
+      }
+    }
+    
+    // Buscar email do condutor se atribuído
+    if (solicitacao.condutor_atribuido_id) {
+      const condutorQuery = `SELECT nome, email FROM usuarios WHERE id = @condutor_id`;
+      const condutorResult = await executeQuery(condutorQuery, { condutor_id: solicitacao.condutor_atribuido_id });
+      if (condutorResult.length > 0) {
+        webhookData.condutor_nome = condutorResult[0].nome;
+        webhookData.condutor_email = condutorResult[0].email;
+      }
+    }
+    
+    // Formatar datas para português WAT
+    console.log('🔍 Datas originais:', {
+      data_inicio: solicitacao.data_inicio,
+      data_fim: solicitacao.data_fim,
+      created_at: solicitacao.created_at,
+      updated_at: solicitacao.updated_at
+    });
+    
+    webhookData.data_inicio_formatada = formatDateToPortugueseWAT(solicitacao.data_inicio);
+    webhookData.data_fim_formatada = formatDateToPortugueseWAT(solicitacao.data_fim);
+    webhookData.created_at_formatada = formatDateToPortugueseWAT(solicitacao.created_at);
+    webhookData.updated_at_formatada = formatDateToPortugueseWAT(solicitacao.updated_at);
+    
+    console.log('🔍 Datas formatadas:', {
+      data_inicio_formatada: webhookData.data_inicio_formatada,
+      data_fim_formatada: webhookData.data_fim_formatada,
+      created_at_formatada: webhookData.created_at_formatada,
+      updated_at_formatada: webhookData.updated_at_formatada
+    });
+    
+    await sendToWebhook({
+      action: 'create',
+      type: 'solicitacao_viatura',
+      data: webhookData
+    });
+    
+    return res.status(201).json(solicitacao);
   } catch (error) {
     console.error('Error creating solicitacao:', error);
     return res.status(500).json({ error: 'Erro ao criar solicitação', details: error instanceof Error ? error.message : 'Unknown error' });
@@ -670,7 +822,17 @@ export const createSolicitacao = async (req: Request, res: Response) => {
 export const updateSolicitacao = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    
+    // Detectar padrões maliciosos nos campos de texto
+    const textFields = [req.body.destino, req.body.motivo, req.body.observacoes, req.body.tipo_viatura];
+    for (const field of textFields) {
+      if (field && detectMaliciousPatterns(field)) {
+        return res.status(400).json({ error: 'Conteúdo inválido detectado. Por favor, remova caracteres especiais ou código.' });
+      }
+    }
+    
+    // Sanitizar dados de entrada
+    const updates = sanitizeSolicitacaoFields(req.body);
     
     const fields: string[] = [];
     const params: Record<string, any> = { id };
@@ -700,6 +862,26 @@ export const updateSolicitacao = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Nenhum campo para atualizar' });
     }
     
+    // Validar datas se estiverem sendo atualizadas
+    if (updates.data_inicio) {
+      const dataInicioObj = new Date(updates.data_inicio);
+      const dataAtual = new Date();
+      dataAtual.setHours(0, 0, 0, 0);
+      
+      if (dataInicioObj < dataAtual) {
+        return res.status(400).json({ error: 'A data de início não pode ser anterior à data atual' });
+      }
+    }
+    
+    if (updates.data_inicio && updates.data_fim) {
+      const dataInicioObj = new Date(updates.data_inicio);
+      const dataFimObj = new Date(updates.data_fim);
+      
+      if (dataFimObj < dataInicioObj) {
+        return res.status(400).json({ error: 'A data de fim não pode ser anterior à data de início' });
+      }
+    }
+    
     const query = `
       UPDATE solicitacoes_viatura
       SET ${fields.join(', ')}, updated_at = GETDATE()
@@ -712,7 +894,69 @@ export const updateSolicitacao = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Solicitação não encontrada' });
     }
     
-    return res.json(result[0]);
+    const solicitacao = result[0];
+    
+    // Buscar dados completos incluindo nome do solicitante e email do condutor
+    let webhookData = { ...solicitacao };
+    
+    // Buscar nome do solicitante
+    if (solicitacao.solicitante_id) {
+      const solicitanteQuery = `SELECT nome, email FROM usuarios WHERE id = @solicitante_id`;
+      const solicitanteResult = await executeQuery(solicitanteQuery, { solicitante_id: solicitacao.solicitante_id });
+      if (solicitanteResult.length > 0) {
+        webhookData.solicitante_nome = solicitanteResult[0].nome;
+        webhookData.solicitante_email = solicitanteResult[0].email;
+      }
+    }
+    
+    // Buscar dados do veículo atribuído se existir
+    if (solicitacao.veiculo_atribuido_id) {
+      const veiculoQuery = `SELECT matricula, marca, modelo FROM veiculos WHERE id = @veiculo_id`;
+      const veiculoResult = await executeQuery(veiculoQuery, { veiculo_id: solicitacao.veiculo_atribuido_id });
+      if (veiculoResult.length > 0) {
+        webhookData.veiculo_matricula = veiculoResult[0].matricula;
+        webhookData.veiculo_marca = veiculoResult[0].marca;
+        webhookData.veiculo_modelo = veiculoResult[0].modelo;
+      }
+    }
+    
+    // Buscar email do condutor se atribuído
+    if (solicitacao.condutor_atribuido_id) {
+      const condutorQuery = `SELECT nome, email FROM usuarios WHERE id = @condutor_id`;
+      const condutorResult = await executeQuery(condutorQuery, { condutor_id: solicitacao.condutor_atribuido_id });
+      if (condutorResult.length > 0) {
+        webhookData.condutor_nome = condutorResult[0].nome;
+        webhookData.condutor_email = condutorResult[0].email;
+      }
+    }
+    
+    // Formatar datas para português WAT
+    console.log('🔍 Datas originais:', {
+      data_inicio: solicitacao.data_inicio,
+      data_fim: solicitacao.data_fim,
+      created_at: solicitacao.created_at,
+      updated_at: solicitacao.updated_at
+    });
+    
+    webhookData.data_inicio_formatada = formatDateToPortugueseWAT(solicitacao.data_inicio);
+    webhookData.data_fim_formatada = formatDateToPortugueseWAT(solicitacao.data_fim);
+    webhookData.created_at_formatada = formatDateToPortugueseWAT(solicitacao.created_at);
+    webhookData.updated_at_formatada = formatDateToPortugueseWAT(solicitacao.updated_at);
+    
+    console.log('🔍 Datas formatadas:', {
+      data_inicio_formatada: webhookData.data_inicio_formatada,
+      data_fim_formatada: webhookData.data_fim_formatada,
+      created_at_formatada: webhookData.created_at_formatada,
+      updated_at_formatada: webhookData.updated_at_formatada
+    });
+    
+    await sendToWebhook({
+      action: 'update',
+      type: 'solicitacao_viatura',
+      data: webhookData
+    });
+    
+    return res.json(solicitacao);
   } catch (error) {
     console.error('Error updating solicitacao:', error);
     return res.status(500).json({ error: 'Erro ao atualizar solicitação', details: error instanceof Error ? error.message : 'Unknown error' });

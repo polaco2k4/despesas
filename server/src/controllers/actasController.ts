@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
+import { sanitizeActaFields, detectMaliciousPatterns } from '../utils/sanitize.js';
 
 const WEBHOOK_URL = 'https://hook.eu2.make.com/x9t6rnvlq94vt3y7d65t99rdyyknu175';
 
@@ -975,6 +976,14 @@ export const getActaById = async (req: Request, res: Response) => {
 
 export const createActa = async (req: Request, res: Response) => {
   try {
+    // Detectar padrões maliciosos nos campos de texto
+    const textFields = [req.body.conteudo, req.body.decisoes];
+    for (const field of textFields) {
+      if (field && detectMaliciousPatterns(field)) {
+        return res.status(400).json({ error: 'Conteúdo inválido detectado. Por favor, remova caracteres especiais ou código.' });
+      }
+    }
+    
     const {
       reuniao_id,
       conteudo,
