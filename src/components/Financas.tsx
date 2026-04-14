@@ -21,7 +21,6 @@ import {
   CalendarDays,
   FilterX,
   Eye,
-  Check,
   X
 } from 'lucide-react';
 import ExcelJS from 'exceljs';
@@ -55,10 +54,12 @@ const FinancasContent: React.FC = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [approvalComment, setApprovalComment] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
   const [filtros, setFiltros] = useState<Filtros>({
     dataInicio: '',
@@ -114,8 +115,9 @@ const FinancasContent: React.FC = () => {
     try {
       console.log('🔍 Frontend Debug - Buscando despesas com filtros:', filtrosAtuais);
       
-      // Para o departamento financeiro, buscar todos os status relevantes
-      const statuses = ['pendente_gestor', 'aprovada', 'paga', 'negada'];
+      // Para o departamento financeiro, buscar apenas despesas aprovadas e pagas
+      // Despesas sem aprovação completa (pendente_gestor, pendente_admin, pendente_adm_area) não devem aparecer
+      const statuses = ['aprovada', 'paga'];
       
       // Buscar todas as despesas dos status relevantes com filtros aplicados
       const promises = statuses.map(status => {
@@ -332,45 +334,48 @@ const FinancasContent: React.FC = () => {
     setMessage({ text: 'Filtros removidos', type: 'info' });
   };
 
-  const handlePagarDespesa = async (despesaId: string) => {
-    if (!window.confirm('Confirmar pagamento desta despesa?')) return;
-    if (!userProfile) {
+  const handleOpenPaymentModal = (despesa: Despesa) => {
+    setSelectedDespesa(despesa);
+    setShowPaymentModal(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!selectedDespesa || !userProfile) {
       setMessage({ text: 'Erro: usuário não autenticado', type: 'error' });
       return;
     }
     
     try {
       setIsProcessing(true);
-      const despesa = despesas.find(d => d.id === despesaId);
-      if (!despesa) throw new Error('Despesa não encontrada');
       
       // Obter a data atual no formato ISO
       const dataPagamento = new Date().toISOString();
       
       // Atualizar a despesa com a data de pagamento, status 'paga' e quem pagou
-      await despesasAPI.update(despesaId, { 
+      await despesasAPI.update(selectedDespesa.id, { 
         status: 'paga' as DespesaStatus,
-        descricao: despesa.descricao, // Mantemos a descrição original
+        descricao: selectedDespesa.descricao,
         data_pagamento: dataPagamento,
-        pago_por: userProfile.id, // Adicionar quem fez o pagamento
+        pago_por: userProfile.id,
         updated_at: new Date().toISOString()
       });
       
       // Atualizar a lista de despesas, removendo a despesa paga
-      // Pois a página de Finanças só deve mostrar despesas aprovadas e não pagas
-      const novasDespesas = despesas.filter(d => d.id !== despesaId);
+      const novasDespesas = despesas.filter(d => d.id !== selectedDespesa.id);
       setDespesas(novasDespesas);
       
       // Atualizar estatísticas com a nova lista de despesas
       calcularEstatisticas(novasDespesas);
       
-      setMessage({ 
-        text: `Despesa paga com sucesso em ${new Date(dataPagamento).toLocaleDateString('pt-AO')}!`, 
-        type: 'success' 
-      });
+      // Fechar modal de confirmação e mostrar modal de sucesso
+      setShowPaymentModal(false);
+      setSuccessMessage(`Pagamento confirmado com sucesso em ${new Date(dataPagamento).toLocaleDateString('pt-AO')}!`);
+      setShowSuccessModal(true);
+      
     } catch (error) {
       console.error('Erro ao processar pagamento:', error);
       setMessage({ text: 'Erro ao processar pagamento', type: 'error' });
+      setShowPaymentModal(false);
     } finally {
       setIsProcessing(false);
     }
@@ -970,7 +975,7 @@ const FinancasContent: React.FC = () => {
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handlePagarDespesa(despesa.id)}
+                          onClick={() => handleOpenPaymentModal(despesa)}
                           disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
                           className={`p-1.5 rounded ${
                             despesa.status === 'paga' || despesa.status === 'negada'
@@ -1390,6 +1395,87 @@ const FinancasContent: React.FC = () => {
                 disabled={isProcessing}
               >
                 {isProcessing ? 'Processando...' : 'Confirmar Aprovação'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Confirmation Modal */}
+      {showPaymentModal && selectedDespesa && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <DollarSign className="h-6 w-6 text-green-500 mr-2" />
+              <h3 className="text-lg font-medium text-gray-900">Confirmar Pagamento</h3>
+            </div>
+            <div className="mb-4">
+              <p className="text-sm text-gray-700 mb-2">
+                Tem certeza que deseja confirmar o pagamento desta despesa?
+              </p>
+              <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Descrição:</span>
+                  <span className="text-sm font-medium text-gray-900">{selectedDespesa.descricao}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Valor:</span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {selectedDespesa.valor?.toLocaleString('pt-AO', { style: 'currency', currency: 'AOA' })}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-600">Rubrica:</span>
+                  <span className="text-sm font-medium text-gray-900">{selectedDespesa.rubrica?.nome || 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 sm:mt-6 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowPaymentModal(false)}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                disabled={isProcessing}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPayment}
+                className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                disabled={isProcessing}
+              >
+                {isProcessing ? 'Processando...' : 'Confirmar Pagamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="bg-green-50 border-b border-green-100 px-6 py-4 rounded-t-lg">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-green-800">Sucesso</h3>
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="text-green-600 hover:text-green-800"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-gray-700">{successMessage}</p>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end">
+              <button
+                onClick={() => setShowSuccessModal(false)}
+                className="px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                Entendi
               </button>
             </div>
           </div>
