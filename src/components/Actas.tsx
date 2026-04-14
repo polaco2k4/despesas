@@ -31,7 +31,7 @@ interface Reuniao {
   departamento_nome?: string;
   convocador_id?: string;
   convocador_nome?: string;
-  status: 'agendada' | 'realizada' | 'cancelada';
+  status: 'agendada' | 'realizada' | 'cancelada' | 'expirada';
   agenda?: string;
   observacoes?: string;
   total_participantes?: number;
@@ -641,6 +641,8 @@ const Actas: React.FC = () => {
         return 'bg-green-100 text-green-800';
       case 'cancelada':
         return 'bg-red-100 text-red-800';
+      case 'expirada':
+        return 'bg-orange-100 text-orange-800';
       case 'em_andamento':
         return 'bg-blue-100 text-blue-800';
       default:
@@ -730,6 +732,7 @@ const Actas: React.FC = () => {
                 <option value="agendada">Agendada</option>
                 <option value="realizada">Realizada</option>
                 <option value="cancelada">Cancelada</option>
+                <option value="expirada">Expirada</option>
               </>
             ) : (
               <>
@@ -1192,14 +1195,20 @@ const Actas: React.FC = () => {
                     <select
                       value={editingReuniao.status || 'agendada'}
                       onChange={(e) => setEditingReuniao({ ...editingReuniao, status: e.target.value as any })}
-                      disabled={isEditing && editingReuniao.convocador_id !== userProfile?.id && userProfile?.role !== 'admin'}
+                      disabled={
+                        editingReuniao.status === 'expirada' || 
+                        (isEditing && editingReuniao.convocador_id !== userProfile?.id && userProfile?.role !== 'admin')
+                      }
                       className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                        isEditing && editingReuniao.convocador_id !== userProfile?.id && userProfile?.role !== 'admin'
+                        editingReuniao.status === 'expirada' || 
+                        (isEditing && editingReuniao.convocador_id !== userProfile?.id && userProfile?.role !== 'admin')
                           ? 'bg-gray-100 cursor-not-allowed'
                           : ''
                       }`}
                       title={
-                        isEditing && editingReuniao.convocador_id !== userProfile?.id && userProfile?.role !== 'admin'
+                        editingReuniao.status === 'expirada'
+                          ? 'Reuniões expiradas não podem ter o status alterado'
+                          : isEditing && editingReuniao.convocador_id !== userProfile?.id && userProfile?.role !== 'admin'
                           ? 'Apenas o criador da reunião ou admin pode alterar o status'
                           : ''
                       }
@@ -1207,6 +1216,7 @@ const Actas: React.FC = () => {
                       <option value="agendada">Agendada</option>
                       <option value="realizada">Realizada</option>
                       <option value="cancelada">Cancelada</option>
+                      <option value="expirada">Expirada</option>
                     </select>
                   </div>
                 </div>

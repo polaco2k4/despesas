@@ -36,6 +36,21 @@ export const getAllReunioes = async (req: Request, res: Response) => {
     const userId = req.headers['x-user-id'] as string;
     const userRole = req.headers['x-user-role'] as string;
     
+    // Primeiro, atualizar reuniões expiradas
+    const updateExpiredQuery = `
+      UPDATE reunioes
+      SET status = 'expirada',
+          updated_at = GETDATE()
+      WHERE status = 'agendada'
+        AND (
+          (data_hora_fim IS NOT NULL AND data_hora_fim < GETDATE())
+          OR
+          (data_hora_fim IS NULL AND DATEADD(HOUR, 2, data_hora) < GETDATE())
+        )
+    `;
+    
+    await executeQuery(updateExpiredQuery);
+    
     let query = `
       SELECT 
         r.*,
