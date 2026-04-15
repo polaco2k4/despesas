@@ -38,6 +38,9 @@ app.use(cors({
 app.use(helmet());
 app.use(morgan('dev'));
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
+
 // Apply JSON parsing to all routes except multipart uploads
 app.use((req, res, next) => {
   const contentType = req.headers['content-type'] || '';

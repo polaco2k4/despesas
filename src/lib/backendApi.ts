@@ -240,6 +240,23 @@ export const despesasAPI = {
     fetchAPI<void>(`/despesas/${id}`, {
       method: 'DELETE',
     }),
+
+  uploadAnexos: async (files: File[]) => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('anexos', file);
+    });
+    return fetchAPI<{
+      success: boolean;
+      files: Array<{ fileUrl: string; filename: string; originalName: string; size: number }>;
+    }>('/despesas/upload-anexos', {
+      method: 'POST',
+      body: formData,
+    });
+  },
+  
+  getAnexos: (despesaId: string) => 
+    fetchAPI<Array<{ id: string; despesa_id: string; anexo_url: string; created_at: string }>>(`/despesas/${despesaId}/anexos`),
 };
 
 export const aprovacoesAPI = {
@@ -447,11 +464,14 @@ export const documentosAPI = {
     method: 'POST',
     body: formData
   }),
-  update: (id: string, data: any) => fetchAPI<Documento>(`/documentos/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }),
+  update: (id: string, data: any) => {
+    // Se data é FormData, enviar como está; senão, serializar como JSON
+    const isFormData = data instanceof FormData;
+    return fetchAPI<Documento>(`/documentos/${id}`, {
+      method: 'PUT',
+      body: isFormData ? data : JSON.stringify(data)
+    });
+  },
   delete: (id: string) => fetchAPI(`/documentos/${id}`, { method: 'DELETE' }),
   download: async (filename: string) => {
     try {

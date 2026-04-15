@@ -2,6 +2,40 @@ import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import type { Despesa, DespesaStatus } from '../types/database.js';
 import { criarNotificacao } from './notificacoesController.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+// Configure multer for despesa file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(process.cwd(), 'uploads', 'documentos');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'despesa_' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+export const uploadAnexo = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /pdf|jpg|jpeg|png/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    
+    if (extname && mimetype) {
+      cb(null, true);
+    } else {
+      cb(new Error('Apenas arquivos PDF, JPG, JPEG e PNG são permitidos'));
+    }
+  }
+});
 
 // Generate despesa number in format xxxx/desp/sigla/yyyy
 const generateDespesaNumber = async (departamentoId?: string) => {
@@ -346,7 +380,7 @@ export const getDespesaById = async (req: Request, res: Response) => {
 
 export const createDespesa = async (req: Request, res: Response) => {
   try {
-    const { rubrica_id, usuario_id, descricao, valor, anexo_url, fornecedor_id } = req.body;
+    const { rubrica_id, usuario_id, descricao, valor, anexo_url, fornecedor_id, anexos_urls } = req.body;
     
     console.log('Creating despesa with data:', { 
       rubrica_id, 
@@ -355,6 +389,7 @@ export const createDespesa = async (req: Request, res: Response) => {
       valor, 
       anexo_url, 
       fornecedor_id,
+      anexos_urls,
       status: 'pendente_gestor'
     });
     
@@ -394,6 +429,19 @@ export const createDespesa = async (req: Request, res: Response) => {
     });
     
     console.log('Despesa created successfully:', result[0]);
+    
+    // Save multiple attachments if provided
+    if (anexos_urls && Array.isArray(anexos_urls) && anexos_urls.length > 0) {
+      const despesaId = result[0].id;
+      for (const anexoUrl of anexos_urls) {
+        const anexoQuery = `
+          INSERT INTO despesa_anexos (despesa_id, anexo_url)
+          VALUES (@despesa_id, @anexo_url)
+        `;
+        await executeQuery(anexoQuery, { despesa_id: despesaId, anexo_url: anexoUrl });
+      }
+      console.log(`Saved ${anexos_urls.length} attachments for despesa ${despesaId}`);
+    }
     
     // Criar notificação para gestores do departamento
     const novaDespesa = result[0];
@@ -510,6 +558,25 @@ export const updateDespesa = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Despesa não encontrada' });
     }
     
+    // Save multiple attachments if provided
+    if (updates.anexos_urls && Array.isArray(updates.anexos_urls) && updates.anexos_urls.length > 0) {
+      // First, delete existing attachments for this despesa
+      const deleteAnexosQuery = `
+        DELETE FROM despesa_anexos WHERE despesa_id = @despesa_id
+      `;
+      await executeQuery(deleteAnexosQuery, { despesa_id: id });
+      
+      // Then insert new attachments
+      for (const anexoUrl of updates.anexos_urls) {
+        const anexoQuery = `
+          INSERT INTO despesa_anexos (despesa_id, anexo_url)
+          VALUES (@despesa_id, @anexo_url)
+        `;
+        await executeQuery(anexoQuery, { despesa_id: id, anexo_url: anexoUrl });
+      }
+      console.log(`Updated ${updates.anexos_urls.length} attachments for despesa ${id}`);
+    }
+    
     res.json(result[0]);
   } catch (error) {
     console.error('Error updating despesa:', error);
@@ -520,6 +587,20 @@ export const updateDespesa = async (req: Request, res: Response) => {
 export const deleteDespesa = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // Verificar se a despesa tem histórico de aprovações
+    const checkHistoryQuery = `
+      SELECT COUNT(*) as count 
+      FROM aprovacoes 
+      WHERE despesa_id = @id
+    `;
+    const historyResult = await executeQuery<{ count: number }>(checkHistoryQuery, { id });
+    
+    if (historyResult.length > 0 && historyResult[0].count > 0) {
+      return res.status(403).json({ 
+        error: 'Não é possível apagar despesas com histórico de aprovações' 
+      });
+    }
 
     const query = `DELETE FROM despesas WHERE id = @id`;
     await executeQuery(query, { id });

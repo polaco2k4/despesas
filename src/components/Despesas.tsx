@@ -27,11 +27,16 @@ const Despesas: React.FC = () => {
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [rubricas, setRubricas] = useState<Array<Rubrica & { orcamento?: { valor_total: number; departamento?: { nome: string } } }>>([]);
   const [loading, setLoading] = useState(true);
-  const [alertDialog, setAlertDialog] = useState({
+  const [alertDialog, setAlertDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'error' | 'warning' | 'success' | 'info';
+  }>({
     isOpen: false,
     title: '',
     message: '',
-    type: 'error' as const,
+    type: 'error',
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -45,7 +50,7 @@ const Despesas: React.FC = () => {
     rubrica_id: '',
     descricao: '',
     valor: '',
-    anexo: null as File | null,
+    anexos: [] as File[],
     fornecedor_id: '',
     valor_orcamento: '',
     orcamento_disponivel: '',
@@ -58,7 +63,7 @@ const Despesas: React.FC = () => {
       rubrica_id: '',
       descricao: '',
       valor: '',
-      anexo: null,
+      anexos: [],
       fornecedor_id: '',
       valor_orcamento: '',
       orcamento_disponivel: '',
@@ -80,6 +85,8 @@ const Despesas: React.FC = () => {
     usuario_id: '',
     fornecedor_id: null // Inicializado como null para consistência com o tipo
   });
+  const [editingAnexos, setEditingAnexos] = useState<File[]>([]);
+  const [despesaAnexos, setDespesaAnexos] = useState<Array<{ id: string; anexo_url: string }>>([]);
 
   useEffect(() => {
     fetchData();
@@ -242,13 +249,32 @@ const Despesas: React.FC = () => {
         return;
       }
       
+      // Upload files if exists
+      let anexosUrls: string[] = [];
+      if (newDespesa.anexos.length > 0) {
+        try {
+          const uploadResult = await despesasAPI.uploadAnexos(newDespesa.anexos);
+          anexosUrls = uploadResult.files.map(f => f.fileUrl);
+        } catch (uploadError) {
+          console.error('Error uploading files:', uploadError);
+          setAlertDialog({
+            isOpen: true,
+            title: 'Erro',
+            message: 'Erro ao fazer upload dos anexos. Por favor, tente novamente.',
+            type: 'error'
+          });
+          return;
+        }
+      }
+      
       const despesaData = {
         rubrica_id: newDespesa.rubrica_id,
         usuario_id: userProfile!.id,
         descricao: newDespesa.descricao,
         valor: valorDespesa,
         fornecedor_id: newDespesa.fornecedor_id,
-        anexo_url: newDespesa.anexo ? URL.createObjectURL(newDespesa.anexo) : null
+        anexo_url: anexosUrls.length > 0 ? anexosUrls[0] : null, // Mantém compatibilidade
+        anexos_urls: anexosUrls // Array de URLs
       };
 
       await despesasAPI.create(despesaData);
@@ -258,7 +284,7 @@ const Despesas: React.FC = () => {
         rubrica_id: '', 
         descricao: '', 
         valor: '', 
-        anexo: null,
+        anexos: [],
         fornecedor_id: '',
         valor_orcamento: '',
         orcamento_disponivel: '',
@@ -270,10 +296,29 @@ const Despesas: React.FC = () => {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setNewDespesa({ ...newDespesa, anexo: e.target.files[0] });
+  const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files).slice(0, 3); // Máximo 3 arquivos
+      setNewDespesa({ ...newDespesa, anexos: [...newDespesa.anexos, ...filesArray].slice(0, 3) });
     }
+  };
+
+  const removeNewAnexo = (index: number) => {
+    setNewDespesa({
+      ...newDespesa,
+      anexos: newDespesa.anexos.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleEditFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files).slice(0, 3);
+      setEditingAnexos([...editingAnexos, ...filesArray].slice(0, 3));
+    }
+  };
+
+  const removeEditingAnexo = (index: number) => {
+    setEditingAnexos(editingAnexos.filter((_, i) => i !== index));
   };
 
   const handleApproval = async (despesaId: string, status: 'aprovada' | 'negada', comentario?: string) => {
@@ -317,17 +362,41 @@ const Despesas: React.FC = () => {
   };
 
   const handleDeleteDespesa = async (id: string) => {
+    // Verificar se a despesa tem histórico de aprovações
+    const despesa = despesas.find(d => d.id === id);
+    if (despesa && despesa.aprovacoes && despesa.aprovacoes.length > 0) {
+      setAlertDialog({
+        isOpen: true,
+        title: 'Ação não permitida',
+        message: 'Não é possível apagar despesas com histórico de aprovações',
+        type: 'error'
+      });
+      return;
+    }
+
     if (confirm('Tem certeza que deseja apagar esta despesa?')) {
       try {
         await despesasAPI.delete(id);
         await fetchData();
-      } catch (error) {
+        setAlertDialog({
+          isOpen: true,
+          title: 'Sucesso',
+          message: 'Despesa apagada com sucesso',
+          type: 'success'
+        });
+      } catch (error: any) {
         console.error('Error deleting despesa:', error);
+        setAlertDialog({
+          isOpen: true,
+          title: 'Erro',
+          message: error.message || 'Erro ao apagar despesa',
+          type: 'error'
+        });
       }
     }
   };
 
-  const handleEditDespesa = (despesa: Despesa) => {
+  const handleEditDespesa = async (despesa: Despesa) => {
     // Se a despesa estiver negada, muda o status para 'pendente' ao editar
     const updatedDespesa = {
       ...despesa,
@@ -343,6 +412,15 @@ const Despesas: React.FC = () => {
       usuario_id: despesa.usuario_id,
       fornecedor_id: despesa.fornecedor_id || null // Permite null para fornecedor_id
     });
+    
+    // Buscar anexos existentes da despesa
+    try {
+      const anexos = await despesasAPI.getAnexos(despesa.id);
+      setDespesaAnexos(anexos);
+    } catch (error) {
+      console.error('Error fetching anexos for edit:', error);
+      setDespesaAnexos([]);
+    }
     
     // Atualiza a despesa selecionada com o status atualizado
     setSelectedDespesa(updatedDespesa);
@@ -391,16 +469,43 @@ const Despesas: React.FC = () => {
         return;
       }
       
-      // If the expense was rejected or has invalid 'pendente' status, change to 'pendente_gestor' when updating
-      const statusAtualizado = (selectedDespesa.status === 'negada' || selectedDespesa.status === 'pendente') ? 'pendente_gestor' : selectedDespesa.status;
+      // Determinar quais anexos enviar
+      let anexoUrl = editingDespesa.anexo_url;
+      let anexosUrls: string[] = [];
+      
+      if (editingAnexos.length > 0) {
+        // Se há novos arquivos selecionados, fazer upload
+        try {
+          const uploadResult = await despesasAPI.uploadAnexos(editingAnexos);
+          anexosUrls = uploadResult.files.map(f => f.fileUrl);
+          anexoUrl = anexosUrls[0]; // Mantém compatibilidade com anexo_url único
+        } catch (uploadError) {
+          console.error('Error uploading files:', uploadError);
+          setAlertDialog({
+            isOpen: true,
+            title: 'Erro',
+            message: 'Erro ao fazer upload dos anexos. Por favor, tente novamente.',
+            type: 'error'
+          });
+          return;
+        }
+      } else if (despesaAnexos.length > 0) {
+        // Se não há novos arquivos mas há anexos existentes (não removidos), manter os existentes
+        anexosUrls = despesaAnexos.map(a => a.anexo_url);
+        anexoUrl = anexosUrls[0];
+      }
+      
+      // If the expense was rejected, change to 'pendente_gestor' when updating
+      const statusAtualizado = selectedDespesa.status === 'negada' ? 'pendente_gestor' : selectedDespesa.status;
       
       const despesaData = {
         rubrica_id: editingDespesa.rubrica_id,
         descricao: editingDespesa.descricao,
         valor: valorDespesa,
         fornecedor_id: editingDespesa.fornecedor_id,
-        status: statusAtualizado, // Atualiza o status se necessário
-        anexo_url: editingDespesa.anexo_url
+        status: statusAtualizado,
+        anexo_url: anexoUrl,
+        anexos_urls: anexosUrls.length > 0 ? anexosUrls : undefined // Envia múltiplos anexos (novos ou existentes)
       };
 
       console.log('Sending despesa update:', {
@@ -415,6 +520,7 @@ const Despesas: React.FC = () => {
       // Fecha o modal de edição e atualiza a lista
       setShowDetailModal(false);
       setIsEditing(false);
+      setEditingAnexos([]);
       resetNewDespesaForm();
       await fetchData();
     } catch (error) {
@@ -684,9 +790,17 @@ const Despesas: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             setSelectedDespesa(despesa);
                             setShowDetailModal(true);
+                            // Buscar anexos da despesa
+                            try {
+                              const anexos = await despesasAPI.getAnexos(despesa.id);
+                              setDespesaAnexos(anexos);
+                            } catch (error) {
+                              console.error('Error fetching anexos:', error);
+                              setDespesaAnexos([]);
+                            }
                           }}
                           className="text-blue-600 hover:text-blue-700"
                           title="Ver detalhes"
@@ -695,7 +809,8 @@ const Despesas: React.FC = () => {
                         </button>
                         
                         {despesa.usuario_id === userProfile?.id && 
-         ['pendente_gestor', 'pendente_admin', 'pendente_adm_area', 'negada'].includes(despesa.status) && (
+         ['pendente_gestor', 'pendente_admin', 'pendente_adm_area', 'negada'].includes(despesa.status) && 
+         (!despesa.aprovacoes || despesa.aprovacoes.length === 0) && (
                           <button
                             onClick={() => handleDeleteDespesa(despesa.id)}
                             className="text-red-600 hover:text-red-700"
@@ -761,79 +876,81 @@ const Despesas: React.FC = () => {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Nova Despesa</h2>
             
             <form onSubmit={handleCreateDespesa} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Rubrica
-                </label>
-                <select
-                  value={newDespesa.rubrica_id}
-                  onChange={(e) => handleRubricaChange(e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Selecionar rubrica</option>
-                  {availableRubricas.map((rubrica) => (
-                    <option key={rubrica.id} value={rubrica.id}>
-                      {rubrica.nome} - {rubrica.orcamento?.departamento?.nome}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Rubrica
+                  </label>
+                  <select
+                    value={newDespesa.rubrica_id}
+                    onChange={(e) => handleRubricaChange(e.target.value)}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Selecionar rubrica</option>
+                    {availableRubricas.map((rubrica) => (
+                      <option key={rubrica.id} value={rubrica.id}>
+                        {rubrica.nome} - {rubrica.orcamento?.departamento?.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={newDespesa.descricao}
+                    onChange={(e) => setNewDespesa({ ...newDespesa, descricao: e.target.value })}
+                    required
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Descrição da despesa..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Valor (Kz)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newDespesa.valor}
+                    onChange={(e) => setNewDespesa({ ...newDespesa, valor: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fornecedor
+                  </label>
+                  <select
+                    value={newDespesa.fornecedor_id}
+                    onChange={(e) => setNewDespesa({ ...newDespesa, fornecedor_id: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Selecionar fornecedor</option>
+                    {fornecedores.map((fornecedor) => (
+                      <option key={fornecedor.id} value={fornecedor.id}>
+                        {fornecedor.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Descrição
-                </label>
-                <textarea
-                  value={newDespesa.descricao}
-                  onChange={(e) => setNewDespesa({ ...newDespesa, descricao: e.target.value })}
-                  required
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Descrição da despesa..."
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor (Kz)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={newDespesa.valor}
-                  onChange={(e) => setNewDespesa({ ...newDespesa, valor: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Fornecedor
-                </label>
-                <select
-                  value={newDespesa.fornecedor_id}
-                  onChange={(e) => setNewDespesa({ ...newDespesa, fornecedor_id: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Selecionar fornecedor</option>
-                  {fornecedores.map((fornecedor) => (
-                    <option key={fornecedor.id} value={fornecedor.id}>
-                      {fornecedor.nome}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Valor da Rubrica (Kz)
@@ -845,11 +962,11 @@ const Despesas: React.FC = () => {
                     value={newDespesa.valor_orcamento}
                     readOnly
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0.00"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Rubrica Disponível (Kz)
@@ -861,11 +978,11 @@ const Despesas: React.FC = () => {
                     value={newDespesa.orcamento_disponivel}
                     readOnly
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0.00"
                   />
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Rubrica Realizada (Kz)
@@ -877,7 +994,7 @@ const Despesas: React.FC = () => {
                     value={newDespesa.orcamento_realizado}
                     readOnly
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="0.00"
                   />
                 </div>
@@ -885,22 +1002,44 @@ const Despesas: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Anexo (opcional)
+                  Anexos (opcional - máx. 3)
                 </label>
-                <div className="mt-1 flex items-center">
-                  <label className="w-full flex flex-col items-center px-4 py-6 bg-white text-blue-600 rounded-lg shadow tracking-wide uppercase border border-blue-600 cursor-pointer hover:bg-blue-50">
-                    <svg className="w-8 h-8" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-                      <path d="M16.88 9.1A4 4 0 0 1 16 17H5a5 5 0 0 1-1-9.9V7a3 3 0 0 1 4.52-2.59A4.98 4.98 0 0 1 17 8c0 .38-.04.74-.12 1.1zM11 11h3l-4-4-4 4h3v3h2v-3z" />
-                    </svg>
-                    <span className="mt-2 text-base leading-normal">
-                      {newDespesa.anexo ? newDespesa.anexo.name : 'Selecionar ficheiro'}
-                    </span>
-                    <input 
-                      type="file" 
-                      className="hidden" 
-                      onChange={handleFileChange}
-                    />
-                  </label>
+                <div className="mt-1 space-y-2">
+                  {newDespesa.anexos.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                      <div className="flex items-center space-x-2">
+                        <FileText size={16} className="text-blue-600" />
+                        <span className="text-sm text-gray-700">{file.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeNewAnexo(index)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                  {newDespesa.anexos.length < 3 && (
+                    <label className="w-full flex flex-col items-center px-4 py-4 bg-white text-blue-600 rounded-lg shadow tracking-wide uppercase border border-blue-600 cursor-pointer hover:bg-blue-50">
+                      <svg className="w-6 h-6" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <path d="M16.88 9.1A4 4 0 0 1 16 17H5a5 5 0 0 1-1-9.9V7a3 3 0 0 1 4.52-2.59A4.98 4.98 0 0 1 17 8c0 .38-.04.74-.12 1.1zM11 11h3l-4-4-4 4h3v3h2v-3z" />
+                      </svg>
+                      <span className="mt-1 text-sm leading-normal">
+                        {newDespesa.anexos.length === 0 ? 'Selecionar ficheiros' : `Adicionar mais (${newDespesa.anexos.length}/3)`}
+                      </span>
+                      <input 
+                        type="file" 
+                        className="hidden"
+                        multiple
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleFilesChange}
+                      />
+                    </label>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    Formatos suportados: .pdf, .jpg, .jpeg, .png (máx. 5MB cada)
+                  </p>
                 </div>
               </div>
 
@@ -930,7 +1069,7 @@ const Despesas: React.FC = () => {
       {/* Detail/Edit Modal */}
       {(showDetailModal && selectedDespesa) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
@@ -944,6 +1083,7 @@ const Despesas: React.FC = () => {
                 onClick={() => {
                   setShowDetailModal(false);
                   setIsEditing(false);
+                  setEditingAnexos([]);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -988,7 +1128,7 @@ const Despesas: React.FC = () => {
                       value={editingDespesa.descricao}
                       onChange={(e) => setEditingDespesa({...editingDespesa, descricao: e.target.value})}
                       required
-                      rows={3}
+                      rows={2}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Descreva a despesa detalhadamente"
                     />
@@ -1033,35 +1173,65 @@ const Despesas: React.FC = () => {
 
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Anexo
+                      Anexos (máx. 3)
                     </label>
-                    <div className="mt-1 flex items-center">
-                      {editingDespesa.anexo_url ? (
-                        <div className="flex items-center">
-                          <a 
-                            href={editingDespesa.anexo_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
-                          >
-                            Ver anexo atual
-                          </a>
+                    <div className="mt-1 space-y-2">
+                      {/* Mostrar anexos existentes */}
+                      {despesaAnexos.length > 0 && editingAnexos.length === 0 && (
+                        <>
+                          <p className="text-xs text-gray-600 mb-2">Anexos atuais:</p>
+                          {despesaAnexos.map((anexo, index) => (
+                            <div key={anexo.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <a 
+                                href={`http://localhost:3001${anexo.anexo_url}`}
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-2"
+                              >
+                                <FileText size={16} />
+                                <span>Anexo {index + 1}</span>
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDespesaAnexos(despesaAnexos.filter((_, i) => i !== index));
+                                }}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          ))}
+                          <p className="text-xs text-gray-500 mt-2">
+                            Ao adicionar novos anexos, os atuais serão substituídos.
+                          </p>
+                        </>
+                      )}
+                      
+                      {/* Mostrar novos anexos selecionados */}
+                      {editingAnexos.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                          <div className="flex items-center space-x-2">
+                            <FileText size={16} className="text-blue-600" />
+                            <span className="text-sm text-gray-700">Novo: {file.name}</span>
+                          </div>
                           <button
                             type="button"
-                            onClick={() => {
-                              setEditingDespesa({...editingDespesa, anexo_url: null});
-                              // Aqui você pode adicionar lógica para remover o anexo do servidor se necessário
-                            }}
-                            className="ml-4 text-red-600 hover:text-red-800 text-sm font-medium"
+                            onClick={() => removeEditingAnexo(index)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
                           >
-                            Remover anexo
+                            Remover
                           </button>
                         </div>
-                      ) : (
+                      ))}
+                      
+                      {editingAnexos.length < 3 && (
                         <div className="w-full">
                           <input
                             type="file"
-                            onChange={handleFileChange}
+                            multiple
+                            onChange={handleEditFilesChange}
+                            accept=".pdf,.jpg,.jpeg,.png"
                             className="block w-full text-sm text-gray-500
                               file:mr-4 file:py-2 file:px-4
                               file:rounded-md file:border-0
@@ -1070,7 +1240,9 @@ const Despesas: React.FC = () => {
                               hover:file:bg-blue-100"
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            Formatos suportados: .pdf, .jpg, .jpeg, .png (máx. 5MB)
+                            {editingAnexos.length > 0 
+                              ? `Novos arquivos selecionados: ${editingAnexos.length}/3` 
+                              : 'Formatos suportados: .pdf, .jpg, .jpeg, .png (máx. 5MB cada)'}
                           </p>
                         </div>
                       )}
@@ -1081,7 +1253,10 @@ const Despesas: React.FC = () => {
                 <div className="flex justify-end space-x-3 pt-4">
                   <button
                     type="button"
-                    onClick={() => setIsEditing(false)}
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditingAnexos([]);
+                    }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                   >
                     Cancelar
@@ -1158,18 +1333,37 @@ const Despesas: React.FC = () => {
                   </div>
                 )}
 
-                {selectedDespesa.anexo_url && (
+                {(selectedDespesa.anexo_url || despesaAnexos.length > 0) && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Anexo</label>
-                    <a 
-                      href={selectedDespesa.anexo_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-700 flex items-center space-x-2"
-                    >
-                      <FileText size={16} />
-                      <span>Ver anexo</span>
-                    </a>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {despesaAnexos.length > 1 ? `Anexos (${despesaAnexos.length})` : 'Anexo'}
+                    </label>
+                    <div className="space-y-2">
+                      {despesaAnexos.length > 0 ? (
+                        despesaAnexos.map((anexo, index) => (
+                          <a 
+                            key={anexo.id}
+                            href={`http://localhost:3001${anexo.anexo_url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                          >
+                            <FileText size={16} />
+                            <span>Anexo {index + 1}</span>
+                          </a>
+                        ))
+                      ) : selectedDespesa.anexo_url ? (
+                        <a 
+                          href={`http://localhost:3001${selectedDespesa.anexo_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                        >
+                          <FileText size={16} />
+                          <span>Ver anexo</span>
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
                 )}
 
@@ -1261,6 +1455,9 @@ const Despesas: React.FC = () => {
                             </p>
                             {aprovacao.comentario && (
                               <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                                <p className="text-xs font-medium text-gray-500 mb-1">
+                                  {aprovacao.status === 'negada' ? 'Motivo da Negação:' : 'Comentário:'}
+                                </p>
                                 <p className="text-sm text-gray-700">{aprovacao.comentario}</p>
                               </div>
                             )}

@@ -41,7 +41,9 @@ const Documentos: React.FC = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [editFiles, setEditFiles] = useState<File[]>([]);
+  const [keepCurrentFile, setKeepCurrentFile] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<Documento | null>(null);
   const [documentHistory, setDocumentHistory] = useState<any[]>([]);
   const [documentComments, setDocumentComments] = useState<any[]>([]);
@@ -206,37 +208,58 @@ const Documentos: React.FC = () => {
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
+    const files = Array.from(e.target.files || []);
+    const remainingSlots = 3 - selectedFiles.length;
+    const filesToAdd = files.slice(0, remainingSlots);
+    
+    if (files.length > remainingSlots) {
+      setAlertDialog({
+        isOpen: true,
+        title: 'Aviso',
+        message: `Você pode adicionar no máximo 3 arquivos. Apenas os primeiros ${remainingSlots} foram adicionados.`,
+        type: 'error'
+      });
+    }
+    
+    setSelectedFiles(prev => [...prev, ...filesToAdd]);
+    if (selectedFiles.length === 0 && filesToAdd.length > 0) {
       setUploadForm(prev => ({
         ...prev,
-        nome: prev.nome || file.name
+        nome: prev.nome || filesToAdd[0].name
       }));
     }
   };
 
+  const removeSelectedFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !userProfile) return;
+    if (selectedFiles.length === 0 || !userProfile) return;
 
     try {
       setUploading(true);
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('nome', uploadForm.nome);
-      formData.append('descricao', uploadForm.descricao);
-      formData.append('categoria', uploadForm.categoria);
-      formData.append('tags', uploadForm.tags);
-      formData.append('publico', uploadForm.publico.toString());
-      formData.append('criado_por', userProfile.id);
-      if (uploadForm.departamento_id) {
-        formData.append('departamento_id', uploadForm.departamento_id);
-      }
+      
+      // Fazer upload de cada arquivo
+      for (const file of selectedFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('nome', uploadForm.nome || file.name);
+        formData.append('descricao', uploadForm.descricao);
+        formData.append('categoria', uploadForm.categoria);
+        formData.append('tags', uploadForm.tags);
+        formData.append('publico', uploadForm.publico.toString());
+        formData.append('criado_por', userProfile.id);
+        if (uploadForm.departamento_id) {
+          formData.append('departamento_id', uploadForm.departamento_id);
+        }
 
-      await documentosAPI.create(formData);
+        await documentosAPI.create(formData);
+      }
+      
       setShowUploadModal(false);
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setUploadForm({
         nome: '',
         descricao: '',
@@ -250,7 +273,7 @@ const Documentos: React.FC = () => {
       setAlertDialog({
         isOpen: true,
         title: 'Sucesso',
-        message: 'Documento enviado com sucesso!',
+        message: `${selectedFiles.length} documento(s) enviado(s) com sucesso!`,
         type: 'success'
       });
     } catch (error) {
@@ -268,6 +291,8 @@ const Documentos: React.FC = () => {
 
   const handleEdit = (documento: Documento) => {
     setSelectedDocument(documento);
+    setEditFiles([]);
+    setKeepCurrentFile(true);
     setEditForm({
       nome: documento.nome,
       descricao: documento.descricao || '',
@@ -279,14 +304,95 @@ const Documentos: React.FC = () => {
     setShowEditModal(true);
   };
 
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const remainingSlots = 3 - editFiles.length;
+    const filesToAdd = files.slice(0, remainingSlots);
+    
+    if (files.length > remainingSlots) {
+      setAlertDialog({
+        isOpen: true,
+        title: 'Aviso',
+        message: `Você pode adicionar no máximo 3 arquivos. Apenas os primeiros ${remainingSlots} foram adicionados.`,
+        type: 'error'
+      });
+    }
+    
+    setEditFiles(prev => [...prev, ...filesToAdd]);
+  };
+
+  const removeEditFile = (index: number) => {
+    setEditFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDocument) return;
 
+    console.log('🔍 Estado do formulário:', {
+      editForm,
+      keepCurrentFile,
+      editFiles: editFiles.length,
+      selectedDocument: selectedDocument.id
+    });
+
+    // Validar se há arquivo quando o atual foi removido
+    if (!keepCurrentFile && editFiles.length === 0) {
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Você removeu o arquivo atual. Por favor, selecione um novo arquivo.',
+        type: 'error'
+      });
+      return;
+    }
+
     try {
-      await documentosAPI.update(selectedDocument.id, editForm);
+      // Se houver novos arquivos, fazer upload completo
+      if (editFiles.length > 0) {
+        console.log('📁 Atualizando com novo arquivo');
+        const formData = new FormData();
+        formData.append('file', editFiles[0]); // Apenas o primeiro arquivo substitui
+        formData.append('nome', editForm.nome);
+        formData.append('descricao', editForm.descricao);
+        formData.append('categoria', editForm.categoria);
+        formData.append('tags', editForm.tags);
+        formData.append('publico', editForm.publico.toString());
+        if (editForm.departamento_id) {
+          formData.append('departamento_id', editForm.departamento_id);
+        }
+        
+        // Atualizar com novo arquivo
+        await documentosAPI.update(selectedDocument.id, formData);
+      } else if (keepCurrentFile) {
+        console.log('📝 Atualizando apenas metadados');
+        // Atualizar apenas metadados (mantém arquivo atual)
+        const updateData: Record<string, any> = {
+          nome: editForm.nome,
+          descricao: editForm.descricao || '',
+          categoria: editForm.categoria || '',
+          tags: editForm.tags || '',
+          publico: editForm.publico
+        };
+        
+        if (editForm.departamento_id) {
+          updateData.departamento_id = editForm.departamento_id;
+        }
+        
+        console.log('📤 Enviando updateData:', updateData);
+        console.log('📊 Número de campos:', Object.keys(updateData).length);
+        console.log('📋 Tipo de dados:', typeof updateData);
+        console.log('🔑 Chaves:', Object.keys(updateData));
+        
+        await documentosAPI.update(selectedDocument.id, updateData);
+      } else {
+        console.error('❌ Nenhuma condição de atualização satisfeita!');
+      }
+      
       setShowEditModal(false);
       setSelectedDocument(null);
+      setEditFiles([]);
+      setKeepCurrentFile(true);
       await fetchDocumentos();
       
       setAlertDialog({
@@ -590,114 +696,140 @@ const Documentos: React.FC = () => {
       {/* Modal de Upload */}
       {showUploadModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-6 border w-full max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Novo Documento</h3>
-              <form onSubmit={handleUpload}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Arquivo *
-                  </label>
-                  <input
-                    type="file"
-                    onChange={handleFileSelect}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    required
-                  />
-                </div>
-                
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nome do Documento
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadForm.nome}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, nome: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Nome do documento"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Descrição
-                  </label>
-                  <textarea
-                    value={uploadForm.descricao}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, descricao: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    rows={3}
-                    placeholder="Descrição do documento"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Categoria
-                  </label>
-                  <select
-                    value={uploadForm.categoria}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, categoria: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="">Selecionar categoria</option>
-                    <option value="contrato">Contrato</option>
-                    <option value="fatura">Fatura</option>
-                    <option value="relatorio">Relatório</option>
-                    <option value="ata">Ata</option>
-                    <option value="outros">Outros</option>
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Departamento
-                  </label>
-                  <select
-                    value={uploadForm.departamento_id}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, departamento_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="">Selecionar departamento</option>
-                    {departamentos.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags
-                  </label>
-                  <input
-                    type="text"
-                    value={uploadForm.tags}
-                    onChange={(e) => setUploadForm(prev => ({ ...prev, tags: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Tags separadas por vírgula"
-                  />
-                </div>
-
-                <div className="mb-6">
-                  <label className="flex items-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Novo Documento</h3>
+              <form onSubmit={handleUpload} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Arquivos (máx. 3) *
+                    </label>
+                    <div className="space-y-2">
+                      {selectedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                          <div className="flex items-center space-x-2">
+                            <FileText size={16} className="text-blue-600" />
+                            <span className="text-sm text-gray-700">{file.name}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeSelectedFile(index)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                      {selectedFiles.length < 3 && (
+                        <input
+                          type="file"
+                          multiple
+                          onChange={handleFileSelect}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+                      <p className="text-xs text-gray-500">
+                        {selectedFiles.length === 0 
+                          ? 'Selecione até 3 arquivos' 
+                          : `${selectedFiles.length}/3 arquivo(s) selecionado(s)`}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nome do Documento
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={uploadForm.publico}
-                      onChange={(e) => setUploadForm(prev => ({ ...prev, publico: e.target.checked }))}
-                      className="mr-2"
+                      type="text"
+                      value={uploadForm.nome}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, nome: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nome do documento"
                     />
-                    <span className="text-sm text-gray-700">Documento público</span>
-                  </label>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Descrição
+                    </label>
+                    <textarea
+                      value={uploadForm.descricao}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, descricao: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={2}
+                      placeholder="Descrição do documento"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Categoria
+                    </label>
+                    <select
+                      value={uploadForm.categoria}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, categoria: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecionar categoria</option>
+                      <option value="contrato">Contrato</option>
+                      <option value="fatura">Fatura</option>
+                      <option value="relatorio">Relatório</option>
+                      <option value="ata">Ata</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Departamento
+                    </label>
+                    <select
+                      value={uploadForm.departamento_id}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, departamento_id: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecionar departamento</option>
+                      {departamentos.map(dept => (
+                        <option key={dept.id} value={dept.id}>{dept.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tags
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadForm.tags}
+                      onChange={(e) => setUploadForm(prev => ({ ...prev, tags: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Tags separadas por vírgula"
+                    />
+                  </div>
+
+                  <div className="flex items-center">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={uploadForm.publico}
+                        onChange={(e) => setUploadForm(prev => ({ ...prev, publico: e.target.checked }))}
+                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-700">Documento público</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex space-x-3 pt-4">
                   <button
                     type="submit"
-                    disabled={!selectedFile || uploading}
+                    disabled={selectedFiles.length === 0 || uploading}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md transition-colors disabled:opacity-50"
                   >
-                    {uploading ? 'Enviando...' : 'Enviar Documento'}
+                    {uploading ? 'Enviando...' : `Enviar ${selectedFiles.length} Documento(s)`}
                   </button>
                   <button
                     type="button"
@@ -716,94 +848,162 @@ const Documentos: React.FC = () => {
       {/* Modal de Edição */}
       {showEditModal && selectedDocument && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+          <div className="relative top-20 mx-auto p-6 border w-full max-w-4xl shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
             <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Editar Documento</h3>
-              <form onSubmit={handleUpdate}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nome do Documento
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.nome}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, nome: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Nome do documento"
-                    required
-                  />
-                </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Editar Documento</h3>
+              <form onSubmit={handleUpdate} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {keepCurrentFile && (
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Arquivo Atual
+                      </label>
+                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-300">
+                        <div className="flex items-center space-x-2">
+                          <FileText size={20} className="text-blue-600" />
+                          <span className="text-sm text-gray-700">{selectedDocument?.nome}</span>
+                        </div>
+                        <div className="flex space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => handleDownload(selectedDocument)}
+                            className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 rounded hover:bg-blue-100 transition-colors"
+                          >
+                            Visualizar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setKeepCurrentFile(false)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 rounded hover:bg-red-100 transition-colors"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Descrição
-                  </label>
-                  <textarea
-                    value={editForm.descricao}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, descricao: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    rows={3}
-                    placeholder="Descrição do documento"
-                  />
-                </div>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {keepCurrentFile ? 'Adicionar Novos Arquivos (opcional, máx. 3)' : 'Novos Arquivos (máx. 3) *'}
+                    </label>
+                    <div className="space-y-2">
+                      {editFiles.map((file, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                          <div className="flex items-center space-x-2">
+                            <FileText size={16} className="text-blue-600" />
+                            <span className="text-sm text-gray-700">Novo: {file.name}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeEditFile(index)}
+                            className="text-red-600 hover:text-red-800 text-sm font-medium"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                      {editFiles.length < 3 && (
+                        <input
+                          type="file"
+                          multiple
+                          onChange={handleEditFileSelect}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      )}
+                      <p className="text-xs text-gray-500">
+                        {editFiles.length === 0 
+                          ? (keepCurrentFile ? 'Adicione novos arquivos ou mantenha o atual' : 'Selecione até 3 arquivos') 
+                          : `${editFiles.length}/3 arquivo(s) selecionado(s)`}
+                      </p>
+                    </div>
+                  </div>
 
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Categoria
-                  </label>
-                  <select
-                    value={editForm.categoria}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, categoria: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="">Selecionar categoria</option>
-                    <option value="contrato">Contrato</option>
-                    <option value="fatura">Fatura</option>
-                    <option value="relatorio">Relatório</option>
-                    <option value="ata">Ata</option>
-                    <option value="outros">Outros</option>
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Departamento
-                  </label>
-                  <select
-                    value={editForm.departamento_id}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, departamento_id: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  >
-                    <option value="">Selecionar departamento</option>
-                    {departamentos.map(dept => (
-                      <option key={dept.id} value={dept.id}>{dept.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tags
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.tags}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, tags: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                    placeholder="Tags separadas por vírgula"
-                  />
-                </div>
-
-                <div className="mb-6">
-                  <label className="flex items-center">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nome do Documento
+                    </label>
                     <input
-                      type="checkbox"
-                      checked={editForm.publico}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, publico: e.target.checked }))}
-                      className="mr-2"
+                      type="text"
+                      value={editForm.nome}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, nome: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Nome do documento"
+                      required
                     />
-                    <span className="text-sm text-gray-700">Documento público</span>
-                  </label>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Descrição
+                    </label>
+                    <textarea
+                      value={editForm.descricao}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, descricao: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={2}
+                      placeholder="Descrição do documento"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Categoria
+                    </label>
+                    <select
+                      value={editForm.categoria}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, categoria: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecionar categoria</option>
+                      <option value="contrato">Contrato</option>
+                      <option value="fatura">Fatura</option>
+                      <option value="relatorio">Relatório</option>
+                      <option value="ata">Ata</option>
+                      <option value="outros">Outros</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Departamento
+                    </label>
+                    <select
+                      value={editForm.departamento_id}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, departamento_id: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Selecionar departamento</option>
+                      {departamentos.map(dept => (
+                        <option key={dept.id} value={dept.id}>{dept.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tags
+                    </label>
+                    <input
+                      type="text"
+                      value={editForm.tags}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, tags: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Tags separadas por vírgula"
+                    />
+                  </div>
+
+                  <div className="flex items-center">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={editForm.publico}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, publico: e.target.checked }))}
+                        className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <span className="text-sm text-gray-700">Documento público</span>
+                    </label>
+                  </div>
                 </div>
 
                 <div className="flex space-x-3 pt-4">
