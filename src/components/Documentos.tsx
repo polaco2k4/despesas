@@ -130,8 +130,13 @@ const Documentos: React.FC = () => {
   };
 
   const handleViewDetails = async (documento: Documento) => {
-    setSelectedDocument(documento);
     setShowDetailsModal(true);
+    try {
+      const completo = await documentosAPI.getById(documento.id);
+      setSelectedDocument(completo);
+    } catch {
+      setSelectedDocument(documento);
+    }
     await Promise.all([
       fetchDocumentHistory(documento.id),
       fetchDocumentComments(documento.id)
@@ -240,8 +245,9 @@ const Documentos: React.FC = () => {
 
     try {
       setUploading(true);
-      
-      // Fazer upload de cada arquivo
+
+      // Fazer upload de cada arquivo; o 1.º é o pai, os demais apontam para ele
+      let parentId: string | null = null;
       for (const file of selectedFiles) {
         const formData = new FormData();
         formData.append('file', file);
@@ -254,8 +260,14 @@ const Documentos: React.FC = () => {
         if (uploadForm.departamento_id) {
           formData.append('departamento_id', uploadForm.departamento_id);
         }
+        if (parentId) {
+          formData.append('documento_pai_id', parentId);
+        }
 
-        await documentosAPI.create(formData);
+        const created = await documentosAPI.create(formData);
+        if (!parentId) {
+          parentId = created.id;
+        }
       }
       
       setShowUploadModal(false);
@@ -289,8 +301,7 @@ const Documentos: React.FC = () => {
     }
   };
 
-  const handleEdit = (documento: Documento) => {
-    setSelectedDocument(documento);
+  const handleEdit = async (documento: Documento) => {
     setEditFiles([]);
     setKeepCurrentFile(true);
     setEditForm({
@@ -301,6 +312,15 @@ const Documentos: React.FC = () => {
       publico: documento.publico || false,
       departamento_id: documento.departamento_id || ''
     });
+
+    // Buscar documento completo (com versoes/arquivos filhos)
+    try {
+      const completo = await documentosAPI.getById(documento.id);
+      setSelectedDocument(completo);
+    } catch {
+      setSelectedDocument(documento);
+    }
+
     setShowEditModal(true);
   };
 
@@ -323,6 +343,24 @@ const Documentos: React.FC = () => {
 
   const removeEditFile = (index: number) => {
     setEditFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveVersao = async (versaoId: string) => {
+    try {
+      await documentosAPI.delete(versaoId);
+      setSelectedDocument((prev: any) => prev ? {
+        ...prev,
+        versoes: prev.versoes?.filter((v: any) => v.id !== versaoId) ?? []
+      } : prev);
+    } catch (error) {
+      console.error('Erro ao remover arquivo vinculado:', error);
+      setAlertDialog({
+        isOpen: true,
+        title: 'Erro',
+        message: 'Erro ao remover o arquivo',
+        type: 'error'
+      });
+    }
   };
 
   const handleUpdate = async (e: React.FormEvent) => {
@@ -490,10 +528,12 @@ const Documentos: React.FC = () => {
   };
 
   const filteredDocumentos = documentos.filter(doc =>
-    doc.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.criador?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    doc.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+    !doc.documento_pai_id && (
+      doc.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.criador?.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      doc.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+    )
   );
 
   if (loading) {
@@ -856,29 +896,63 @@ const Documentos: React.FC = () => {
                   {keepCurrentFile && (
                     <div className="col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Arquivo Atual
+                        {(selectedDocument?.versoes?.length ?? 0) > 0
+                          ? `Arquivos Atuais (${1 + (selectedDocument?.versoes?.length ?? 0)})`
+                          : 'Arquivo Atual'}
                       </label>
-                      <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-300">
-                        <div className="flex items-center space-x-2">
-                          <FileText size={20} className="text-blue-600" />
-                          <span className="text-sm text-gray-700">{selectedDocument?.nome}</span>
+                      <div className="space-y-2">
+                        {/* Arquivo principal */}
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-300">
+                          <div className="flex items-center space-x-2">
+                            <FileText size={20} className="text-blue-600" />
+                            <span className="text-sm text-gray-700">
+                              {selectedDocument?.nome_original || selectedDocument?.nome}
+                            </span>
+                          </div>
+                          <div className="flex space-x-2">
+                            <button
+                              type="button"
+                              onClick={() => handleDownload(selectedDocument)}
+                              className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 rounded hover:bg-blue-100 transition-colors"
+                            >
+                              Visualizar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setKeepCurrentFile(false)}
+                              className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 rounded hover:bg-red-100 transition-colors"
+                            >
+                              Remover
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => handleDownload(selectedDocument)}
-                            className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 rounded hover:bg-blue-100 transition-colors"
-                          >
-                            Visualizar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setKeepCurrentFile(false)}
-                            className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 rounded hover:bg-red-100 transition-colors"
-                          >
-                            Remover
-                          </button>
-                        </div>
+                        {/* Arquivos filhos */}
+                        {selectedDocument?.versoes?.map((versao: any) => (
+                          <div key={versao.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md border border-gray-300">
+                            <div className="flex items-center space-x-2">
+                              <FileText size={20} className="text-blue-600" />
+                              <span className="text-sm text-gray-700">
+                                {versao.nome_original || versao.nome}
+                              </span>
+                            </div>
+                            <div className="flex space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => handleDownload(versao)}
+                                className="text-blue-600 hover:text-blue-800 text-sm font-medium px-3 py-1 rounded hover:bg-blue-100 transition-colors"
+                              >
+                                Visualizar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveVersao(versao.id)}
+                                className="text-red-600 hover:text-red-800 text-sm font-medium px-3 py-1 rounded hover:bg-red-100 transition-colors"
+                              >
+                                Remover
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1157,6 +1231,35 @@ const Documentos: React.FC = () => {
                       </button>
                     </div>
                   </div>
+
+                  {/* Versões / Arquivos Vinculados */}
+                  {(selectedDocument.versoes?.length ?? 0) > 0 && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-3">
+                        Arquivos Vinculados ({selectedDocument.versoes!.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {selectedDocument.versoes!.map((versao: any, index: number) => (
+                          <div key={versao.id} className="flex items-center justify-between p-3 bg-white rounded-md border border-gray-200">
+                            <div className="flex items-center space-x-2 min-w-0">
+                              <FileText size={16} className="text-blue-500 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium text-gray-900 truncate">{versao.nome_original}</p>
+                                <p className="text-xs text-gray-500">{formatFileSize(versao.tamanho)} · {formatDate(versao.created_at)}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleDownload(versao)}
+                              className="ml-2 p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-full flex-shrink-0"
+                              title="Baixar"
+                            >
+                              <Download size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Histórico de Alterações */}

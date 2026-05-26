@@ -400,7 +400,7 @@ const Despesas: React.FC = () => {
     // Se a despesa estiver negada, muda o status para 'pendente' ao editar
     const updatedDespesa = {
       ...despesa,
-      status: despesa.status === 'negada' ? 'pendente' : despesa.status
+      status: despesa.status === 'negada' ? 'pendente_gestor' : despesa.status
     };
     
     // Prepara os dados para edição, tratando corretamente o fornecedor_id

@@ -580,7 +580,8 @@ export const updateDespesa = async (req: Request, res: Response) => {
     res.json(result[0]);
   } catch (error) {
     console.error('Error updating despesa:', error);
-    res.status(500).json({ error: 'Erro ao atualizar despesa' });
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ error: 'Erro ao atualizar despesa', details: message });
   }
 };
 

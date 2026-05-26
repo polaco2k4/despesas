@@ -102,7 +102,7 @@ export const getAllDocumentos = async (req: Request, res: Response) => {
     
     
     
-    let whereConditions = ['d.ativo = @ativo'];
+    let whereConditions = ['d.ativo = @ativo', 'd.documento_pai_id IS NULL'];
     const params: any = { ativo: ativo === '1' };
     
     // Role-based access control
@@ -303,39 +303,40 @@ export const createDocumento = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Arquivo é obrigatório' });
     }
     
-    const { 
-      nome, 
-      descricao, 
-      categoria, 
-      tags, 
-      publico = false, 
+    const {
+      nome,
+      descricao,
+      categoria,
+      tags,
+      publico = false,
       departamento_id,
-      criado_por 
+      criado_por,
+      documento_pai_id
     } = req.body;
-    
+
     if (!criado_por) {
       return res.status(400).json({ error: 'Usuário criador é obrigatório' });
     }
-    
+
     // Generate document number
     const numeroDocumento = await generateDocumentNumber(departamento_id);
-    
+
     const documentoNome = nome || file.originalname;
     const caminhoArquivo = file.path;
     const urlAcesso = `/api/documentos/${file.filename}/download`;
-    
+
     const query = `
       INSERT INTO documentos (
         nome, nome_original, descricao, tipo_arquivo, tamanho, caminho_arquivo,
-        url_acesso, categoria, tags, criado_por, departamento_id, publico, numero_documento
+        url_acesso, categoria, tags, criado_por, departamento_id, publico, numero_documento, documento_pai_id
       )
       OUTPUT INSERTED.id
       VALUES (
         @nome, @nome_original, @descricao, @tipo_arquivo, @tamanho, @caminho_arquivo,
-        @url_acesso, @categoria, @tags, @criado_por, @departamento_id, @publico, @numero_documento
+        @url_acesso, @categoria, @tags, @criado_por, @departamento_id, @publico, @numero_documento, @documento_pai_id
       )
     `;
-    
+
     const result = await executeQuery(query, {
       nome: documentoNome,
       nome_original: file.originalname,
@@ -349,7 +350,8 @@ export const createDocumento = async (req: Request, res: Response) => {
       criado_por,
       departamento_id: departamento_id || null,
       publico: publico === 'true' || publico === true,
-      numero_documento: numeroDocumento
+      numero_documento: numeroDocumento,
+      documento_pai_id: documento_pai_id || null
     });
     
     const documento = await getDocumentoByIdInternal(result[0].id);
@@ -378,12 +380,9 @@ export const updateDocumento = async (req: Request, res: Response) => {
     const { id } = req.params;
     const updates = req.body;
     const userId = req.headers['x-user-id'] as string;
-    
-    console.log('🔍 Debug updateDocumento - ID:', id);
-    console.log('🔍 Debug updateDocumento - req.body:', updates);
-    console.log('🔍 Debug updateDocumento - Content-Type:', req.headers['content-type']);
-    
-    if (!updates || Object.keys(updates).length === 0) {
+    const newFile = req.file;
+
+    if ((!updates || Object.keys(updates).length === 0) && !newFile) {
       return res.status(400).json({ error: 'Dados de atualização não fornecidos' });
     }
     
@@ -492,7 +491,31 @@ export const updateDocumento = async (req: Request, res: Response) => {
         );
       }
     }
-    
+
+    // Handle file replacement
+    if (newFile) {
+      fields.push('nome_original = @nome_original');
+      fields.push('tipo_arquivo = @tipo_arquivo');
+      fields.push('tamanho = @tamanho');
+      fields.push('caminho_arquivo = @caminho_arquivo');
+      fields.push('url_acesso = @url_acesso');
+      params.nome_original = newFile.originalname;
+      params.tipo_arquivo = newFile.mimetype;
+      params.tamanho = newFile.size;
+      params.caminho_arquivo = newFile.path;
+      params.url_acesso = `/api/documentos/${newFile.filename}/download`;
+      await createHistorico(
+        id,
+        userId,
+        'edicao',
+        'arquivo',
+        documentoAtual.nome_original || '',
+        newFile.originalname,
+        `Arquivo substituído por "${newFile.originalname}"`,
+        req.ip
+      );
+    }
+
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Nenhum campo para atualizar' });
     }
@@ -683,13 +706,22 @@ async function getDocumentoByIdInternal(id: string) {
   `;
   
   const results = await executeQuery(query, { id });
-  
+
   if (!results || results.length === 0) {
     return null;
   }
-  
+
   const row = results[0];
-  
+
+  // Buscar arquivos filhos (documentos vinculados via documento_pai_id)
+  const versoesQuery = `
+    SELECT id, nome, nome_original, tipo_arquivo, tamanho, caminho_arquivo, url_acesso, created_at
+    FROM documentos
+    WHERE documento_pai_id = @id AND ativo = 1
+    ORDER BY created_at ASC
+  `;
+  const versoesRows = await executeQuery(versoesQuery, { id });
+
   return {
     id: row.id,
     nome: row.nome,
@@ -720,6 +752,16 @@ async function getDocumentoByIdInternal(id: string) {
       id: row['departamento.id'],
       nome: row['departamento.nome'],
       sigla: row['departamento.sigla']
-    } : undefined
+    } : undefined,
+    versoes: versoesRows.map((v: any) => ({
+      id: v.id,
+      nome: v.nome,
+      nome_original: v.nome_original,
+      tipo_arquivo: v.tipo_arquivo,
+      tamanho: v.tamanho,
+      caminho_arquivo: v.caminho_arquivo,
+      url_acesso: v.url_acesso,
+      created_at: v.created_at
+    }))
   };
 }

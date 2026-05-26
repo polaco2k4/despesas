@@ -17,15 +17,14 @@ const router = Router();
 router.get('/', getAllDocumentos);
 router.get('/download/:filename', downloadDocumento);
 router.get('/download-by-id/:id', downloadDocumentoById);
-router.get('/:id', getDocumentoById);
 router.get('/:documentoId/historico', getHistoricoByDocumentoId);
-router.post('/', upload.single('file'), createDocumento);
-router.put('/:id', updateDocumento);
-router.delete('/:id', deleteDocumento);
-
 router.get('/:documentoId/comentarios', getComentariosByDocumentoId);
 router.post('/:documentoId/comentarios', createComentario);
 router.put('/comentarios/:comentarioId', updateComentario);
 router.delete('/comentarios/:comentarioId', deleteComentario);
+router.get('/:id', getDocumentoById);
+router.post('/', upload.single('file'), createDocumento);
+router.put('/:id', upload.single('file'), updateDocumento);
+router.delete('/:id', deleteDocumento);
 
 export default router;
