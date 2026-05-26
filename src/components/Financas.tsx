@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { despesasAPI, rubricasAPI, departamentosAPI } from '../lib/backendApi';
+import { despesasAPI, rubricasAPI, departamentosAPI, dashboardAPI } from '../lib/backendApi';
 import type { Despesa, Rubrica, Departamento, DashboardStats, DespesaStatus } from '../types/database';
 import WithDepartmentAccess from './auth/withDepartmentAccess';
 import { useAuth } from '../contexts/AuthContext';
@@ -84,6 +84,7 @@ const FinancasContent: React.FC = () => {
     despesasNegadas: 0,
     utilizacaoOrcamento: 0
   });
+  const [despesaAnexos, setDespesaAnexos] = useState<Array<{ id: string; anexo_url: string }>>([]);
   const [showRelatorios, setShowRelatorios] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -188,15 +189,21 @@ const FinancasContent: React.FC = () => {
       // Calcular estatísticas iniciais
       calcularEstatisticas(despesas);
       
-      // Definir estatísticas iniciais para o dashboard
-      setStats({
-        totalOrcamento: 0, // Será calculado com base nas rubricas
-        totalDespesas: despesas.reduce((sum, d) => sum + d.valor, 0),
-        despesasPendentes: despesas.filter(d => d.status === 'pendente_gestor').length,
-        despesasAprovadas: despesas.filter(d => d.status === 'aprovada').length,
-        despesasNegadas: despesas.filter(d => d.status === 'negada').length,
-        utilizacaoOrcamento: 0 // Será calculado com base no orçamento total
-      });
+      // Buscar stats do dashboard para obter totalOrcamento e utilizacaoOrcamento
+      try {
+        const dashStats = await dashboardAPI.getStats({
+          userId: userProfile?.id,
+          userRole: userProfile?.role,
+          departamentoId: userProfile?.departamento_id
+        });
+        setStats(prev => ({
+          ...prev,
+          totalOrcamento: dashStats.totalOrcamento || 0,
+          utilizacaoOrcamento: dashStats.utilizacaoOrcamento || 0
+        }));
+      } catch (e) {
+        console.error('Erro ao buscar stats do orçamento:', e);
+      }
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
       throw error;
@@ -212,7 +219,7 @@ const FinancasContent: React.FC = () => {
       .reduce((sum, d) => sum + d.valor, 0);
       
     const totalPendente = despesasFiltradas
-      .filter(d => d.status === 'pendente_gestor')
+      .filter(d => d.status === 'aprovada')
       .reduce((sum, d) => sum + d.valor, 0);
       
     const totalNegado = despesasFiltradas
@@ -965,9 +972,16 @@ const FinancasContent: React.FC = () => {
                     <td className="px-3 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-1">
                         <button
-                          onClick={() => {
+                          onClick={async () => {
                             setSelectedDespesa(despesa);
                             setShowDetailsModal(true);
+                            try {
+                              const anexos = await despesasAPI.getAnexos(despesa.id);
+                              setDespesaAnexos(anexos);
+                            } catch (error) {
+                              console.error('Error fetching anexos:', error);
+                              setDespesaAnexos([]);
+                            }
                           }}
                           className="p-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded"
                           title="Ver detalhes"
@@ -1119,7 +1133,7 @@ const FinancasContent: React.FC = () => {
                   <p className="text-sm text-gray-500 mt-1">ID: {selectedDespesa.id}</p>
                 </div>
                 <button
-                  onClick={() => setShowDetailsModal(false)}
+                  onClick={() => { setShowDetailsModal(false); setDespesaAnexos([]); }}
                   className="text-gray-400 hover:text-gray-500 focus:outline-none"
                 >
                   <span className="sr-only">Fechar</span>
@@ -1192,18 +1206,37 @@ const FinancasContent: React.FC = () => {
                     </p>
                   </div>
                 )}
-                {selectedDespesa.anexo_url && (
+                {(selectedDespesa.anexo_url || despesaAnexos.length > 0) && (
                   <div className="md:col-span-2">
-                    <h4 className="text-sm font-medium text-gray-500">Anexo</h4>
-                    <a 
-                      href={selectedDespesa.anexo_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="mt-1 inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
-                    >
-                      <FileText className="h-4 w-4 mr-1" />
-                      Ver anexo
-                    </a>
+                    <h4 className="text-sm font-medium text-gray-500">
+                      {despesaAnexos.length > 1 ? `Anexos (${despesaAnexos.length})` : 'Anexo'}
+                    </h4>
+                    <div className="mt-1 space-y-2">
+                      {despesaAnexos.length > 0 ? (
+                        despesaAnexos.map((anexo, index) => (
+                          <a
+                            key={anexo.id}
+                            href={`http://localhost:3001${anexo.anexo_url}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                          >
+                            <FileText className="h-4 w-4" />
+                            <span>Anexo {despesaAnexos.length > 1 ? index + 1 : ''}</span>
+                          </a>
+                        ))
+                      ) : selectedDespesa.anexo_url ? (
+                        <a
+                          href={`http://localhost:3001${selectedDespesa.anexo_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Ver anexo</span>
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1315,7 +1348,7 @@ const FinancasContent: React.FC = () => {
               <div className="mt-6 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setShowDetailsModal(false)}
+                  onClick={() => { setShowDetailsModal(false); setDespesaAnexos([]); }}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                 >
                   Fechar
