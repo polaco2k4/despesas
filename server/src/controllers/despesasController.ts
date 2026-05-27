@@ -226,7 +226,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
       SELECT 
         d.id, d.rubrica_id, d.usuario_id, d.descricao, d.valor, d.status,
         d.anexo_url, d.data_pagamento, d.motivo_rejeicao, d.fornecedor_id, d.pago_por,
-        d.created_at, d.updated_at, d.numero_despesa,
+        d.created_at, d.updated_at, d.numero_despesa, d.numero_operacao, d.comprovante_pagamento_url,
         r.id as rubrica_id_nested,
         r.nome as rubrica_nome,
         r.descricao as rubrica_descricao,
@@ -315,6 +315,8 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         created_at: row.created_at,
         updated_at: row.updated_at,
         numero_despesa: row.numero_despesa,
+        numero_operacao: row.numero_operacao,
+        comprovante_pagamento_url: row.comprovante_pagamento_url,
         rubrica: row.rubrica_id_nested ? {
           id: row.rubrica_id_nested,
           nome: row.rubrica_nome,
@@ -361,7 +363,7 @@ export const getDespesaById = async (req: Request, res: Response) => {
       SELECT 
         d.id, d.rubrica_id, d.usuario_id, d.descricao, d.valor, d.status,
         d.anexo_url, d.data_pagamento, d.motivo_rejeicao, d.fornecedor_id,
-        d.created_at, d.updated_at, d.numero_despesa
+        d.created_at, d.updated_at, d.numero_despesa, d.numero_operacao, d.comprovante_pagamento_url
       FROM despesas d
       WHERE d.id = @id
     `;
@@ -540,6 +542,14 @@ export const updateDespesa = async (req: Request, res: Response) => {
     if (updates.motivo_rejeicao !== undefined) {
       fields.push('motivo_rejeicao = @motivo_rejeicao');
       params.motivo_rejeicao = updates.motivo_rejeicao;
+    }
+    if (updates.numero_operacao !== undefined) {
+      fields.push('numero_operacao = @numero_operacao');
+      params.numero_operacao = updates.numero_operacao;
+    }
+    if (updates.comprovante_pagamento_url !== undefined) {
+      fields.push('comprovante_pagamento_url = @comprovante_pagamento_url');
+      params.comprovante_pagamento_url = updates.comprovante_pagamento_url;
     }
     
     if (fields.length === 0) {

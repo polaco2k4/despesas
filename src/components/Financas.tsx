@@ -58,6 +58,9 @@ const FinancasContent: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentNumeroOperacao, setPaymentNumeroOperacao] = useState('');
+  const [paymentDataPagamento, setPaymentDataPagamento] = useState('');
+  const [paymentDocumento, setPaymentDocumento] = useState<File | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
@@ -343,6 +346,9 @@ const FinancasContent: React.FC = () => {
 
   const handleOpenPaymentModal = (despesa: Despesa) => {
     setSelectedDespesa(despesa);
+    setPaymentNumeroOperacao('');
+    setPaymentDataPagamento('');
+    setPaymentDocumento(null);
     setShowPaymentModal(true);
   };
 
@@ -351,19 +357,40 @@ const FinancasContent: React.FC = () => {
       setMessage({ text: 'Erro: usuário não autenticado', type: 'error' });
       return;
     }
+
+    if (!paymentNumeroOperacao.trim()) {
+      setMessage({ text: 'Por favor, informe o número de operação.', type: 'error' });
+      return;
+    }
+
+    if (!paymentDataPagamento) {
+      setMessage({ text: 'Por favor, informe a data do pagamento.', type: 'error' });
+      return;
+    }
+
+    if (!paymentDocumento) {
+      setMessage({ text: 'Por favor, anexe o comprovante de pagamento.', type: 'error' });
+      return;
+    }
     
     try {
       setIsProcessing(true);
       
-      // Obter a data atual no formato ISO
-      const dataPagamento = new Date().toISOString();
+      // Upload do comprovante de pagamento
+      const uploadResult = await despesasAPI.uploadAnexos([paymentDocumento]);
+      const comprovanteUrl = uploadResult.files[0]?.fileUrl || '';
+
+      // Data de pagamento no formato ISO a partir do campo da data
+      const dataPagamento = new Date(paymentDataPagamento).toISOString();
       
-      // Atualizar a despesa com a data de pagamento, status 'paga' e quem pagou
+      // Atualizar a despesa com todos os dados de pagamento
       await despesasAPI.update(selectedDespesa.id, { 
         status: 'paga' as DespesaStatus,
         descricao: selectedDespesa.descricao,
         data_pagamento: dataPagamento,
         pago_por: userProfile.id,
+        numero_operacao: paymentNumeroOperacao.trim(),
+        comprovante_pagamento_url: comprovanteUrl,
         updated_at: new Date().toISOString()
       });
       
@@ -1206,6 +1233,34 @@ const FinancasContent: React.FC = () => {
                     </p>
                   </div>
                 )}
+                {selectedDespesa.status === 'paga' && selectedDespesa.numero_operacao && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Nº de Operação</h4>
+                    <p className="mt-1 text-sm font-mono text-gray-900">{selectedDespesa.numero_operacao}</p>
+                  </div>
+                )}
+                {selectedDespesa.status === 'paga' && selectedDespesa.data_pagamento && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-500">Data do Pagamento</h4>
+                    <p className="mt-1 text-sm text-gray-900">
+                      {new Date(selectedDespesa.data_pagamento).toLocaleDateString('pt-AO')}
+                    </p>
+                  </div>
+                )}
+                {selectedDespesa.status === 'paga' && selectedDespesa.comprovante_pagamento_url && (
+                  <div className="md:col-span-2">
+                    <h4 className="text-sm font-medium text-gray-500 mb-1">Comprovante</h4>
+                    <a
+                      href={`http://localhost:3001${selectedDespesa.comprovante_pagamento_url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                    >
+                      <FileText className="h-4 w-4" />
+                      <span>Comprovante</span>
+                    </a>
+                  </div>
+                )}
                 {(selectedDespesa.anexo_url || despesaAnexos.length > 0) && (
                   <div className="md:col-span-2">
                     <h4 className="text-sm font-medium text-gray-500">
@@ -1463,6 +1518,66 @@ const FinancasContent: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Número de Operação <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={paymentNumeroOperacao}
+                  onChange={(e) => setPaymentNumeroOperacao(e.target.value)}
+                  placeholder="Ex: 2024TRF000123"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Data do Pagamento <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={paymentDataPagamento}
+                  onChange={(e) => setPaymentDataPagamento(e.target.value)}
+                  max={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Comprovante de Pagamento <span className="text-red-500">*</span>
+                </label>
+                {paymentDocumento ? (
+                  <div className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-md">
+                    <div className="flex items-center space-x-2 min-w-0">
+                      <FileText className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      <span className="text-sm text-gray-700 truncate">{paymentDocumento.name}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentDocumento(null)}
+                      className="ml-2 text-red-500 hover:text-red-700 flex-shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full py-4 border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:border-green-400 hover:bg-green-50 transition-colors">
+                    <FileText className="h-6 w-6 text-gray-400 mb-1" />
+                    <span className="text-sm text-gray-500">Clique para selecionar o documento</span>
+                    <span className="text-xs text-gray-400 mt-1">PDF, JPG, PNG (máx. 5MB)</span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      onChange={(e) => setPaymentDocumento(e.target.files?.[0] || null)}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+
             <div className="mt-5 sm:mt-6 flex justify-end space-x-3">
               <button
                 type="button"
@@ -1476,7 +1591,7 @@ const FinancasContent: React.FC = () => {
                 type="button"
                 onClick={handleConfirmPayment}
                 className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
-                disabled={isProcessing}
+                disabled={isProcessing || !paymentNumeroOperacao.trim() || !paymentDataPagamento || !paymentDocumento}
               >
                 {isProcessing ? 'Processando...' : 'Confirmar Pagamento'}
               </button>

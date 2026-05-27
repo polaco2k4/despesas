@@ -1332,6 +1332,32 @@ const Despesas: React.FC = () => {
                     </p>
                   </div>
                 )}
+                {selectedDespesa.status === 'paga' && selectedDespesa.numero_operacao && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Nº de Operação</label>
+                    <p className="text-gray-900 font-mono">{selectedDespesa.numero_operacao}</p>
+                  </div>
+                )}
+                {selectedDespesa.status === 'paga' && selectedDespesa.data_pagamento && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Data do Pagamento</label>
+                    <p className="text-gray-900">{new Date(selectedDespesa.data_pagamento).toLocaleDateString('pt-AO')}</p>
+                  </div>
+                )}
+                {selectedDespesa.status === 'paga' && selectedDespesa.comprovante_pagamento_url && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Comprovante</label>
+                    <a
+                      href={`http://localhost:3001${selectedDespesa.comprovante_pagamento_url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
+                    >
+                      <FileText size={16} />
+                      <span>Comprovante</span>
+                    </a>
+                  </div>
+                )}
 
                 {(selectedDespesa.anexo_url || despesaAnexos.length > 0) && (
                   <div>

@@ -57,6 +57,8 @@ export interface Despesa {
   motivo_rejeicao?: string | null;
   fornecedor_id?: string | null;
   pago_por?: string | null;
+  numero_operacao?: string | null;
+  comprovante_pagamento_url?: string | null;
   created_at: string;
   updated_at: string;
   rubrica?: Rubrica;
