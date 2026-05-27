@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import { sanitizeSolicitacaoFields, detectMaliciousPatterns } from '../utils/sanitize.js';
 
-const WEBHOOK_URL = 'https://hook.eu2.make.com/vmglrak6t8op535e62b7rwo8cbbprrw8';
+const WEBHOOK_URL = 'https://hook.eu2.make.com/axlktvagr9tkkhfzg3p9rez2vbs46pyv';
 
 const formatDateToPortugueseWAT = (date: Date | string | null | undefined): string => {
   if (!date) {
