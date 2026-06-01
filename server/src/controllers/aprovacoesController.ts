@@ -3,6 +3,40 @@ import { executeQuery } from '../config/database.js';
 import type { Aprovacao, AprovacaoStatus, NivelAprovacao, DespesaStatus } from '../types/database.js';
 import { criarNotificacao } from './notificacoesController.js';
 
+const WEBHOOK_URL_DESPESAS = 'https://hook.eu2.make.com/yxbxiw2993rsk2ng2sus3t8p4xs4e79u';
+
+const formatDateWAT = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '';
+    const options: Intl.DateTimeFormatOptions = {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Africa/Lagos', hour12: false
+    };
+    return new Intl.DateTimeFormat('pt-PT', options).format(d).replace(',', '');
+  } catch { return ''; }
+};
+
+const sendAprovacaoToWebhook = async (data: any) => {
+  try {
+    console.log(`📤 Sending aprovacao webhook:`, data.aprovacao_id);
+    const response = await fetch(WEBHOOK_URL_DESPESAS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'aprovacao', type: 'despesa', data })
+    });
+    if (!response.ok) {
+      console.error('❌ Aprovacao webhook error:', response.status, await response.text());
+    } else {
+      console.log('✅ Aprovacao webhook sent successfully');
+    }
+  } catch (error) {
+    console.error('❌ Error sending aprovacao to webhook:', error);
+  }
+};
+
 export const getAllAprovacoes = async (req: Request, res: Response) => {
   try {
     const query = `
@@ -162,8 +196,8 @@ export const createAprovacao = async (req: Request, res: Response) => {
     );
     
     // Se foi aprovada e precisa do próximo nível, notificar os próximos aprovadores
+    let proximosAprovadores: any[] = [];
     if (status === 'aprovada' && proximoStatus !== 'aprovada') {
-      let proximosAprovadores = [];
       
       if (proximoStatus === 'pendente_admin') {
         // Notificar admins
@@ -198,6 +232,105 @@ export const createAprovacao = async (req: Request, res: Response) => {
       }
     }
     
+    // Build enriched webhook payload
+    const webhookData: any = {
+      aprovacao_id: aprovacaoResult.id,
+      aprovacao_status: aprovacaoResult.status,
+      aprovacao_role: aprovacaoResult.role,
+      aprovacao_nivel: (aprovacaoResult as any).nivel_aprovacao,
+      aprovacao_comentario: aprovacaoResult.comentario,
+      aprovacao_em: aprovacaoResult.aprovado_em,
+      aprovacao_em_formatada: formatDateWAT(aprovacaoResult.aprovado_em),
+      aprovador_id: aprovador.id,
+      aprovador_nome: aprovador.nome,
+      aprovador_email: aprovador.email,
+      aprovador_role: aprovador.role,
+      despesa_id: despesa.id,
+      despesa_numero: despesa.numero_despesa,
+      despesa_descricao: despesa.descricao,
+      despesa_valor: despesa.valor,
+      despesa_status_anterior: despesa.status,
+      despesa_status_novo: proximoStatus,
+      despesa_anexo_url: despesa.anexo_url,
+      despesa_created_at_formatada: formatDateWAT(despesa.created_at),
+    };
+
+    // Fetch solicitante info
+    const solicitanteWHResult = await executeQuery<any>(
+      `SELECT nome, email, role FROM usuarios WHERE id = @uid`,
+      { uid: despesa.usuario_id }
+    );
+    if (solicitanteWHResult.length > 0) {
+      webhookData.solicitante_id = despesa.usuario_id;
+      webhookData.solicitante_nome = solicitanteWHResult[0].nome;
+      webhookData.solicitante_email = solicitanteWHResult[0].email;
+      webhookData.solicitante_role = solicitanteWHResult[0].role;
+    }
+
+    // Fetch rubrica and departamento
+    if (despesa.rubrica_id) {
+      const rubricaWHResult = await executeQuery<any>(
+        `SELECT r.nome as rubrica_nome, dept.id as departamento_id, dept.nome as departamento_nome
+         FROM rubricas r
+         LEFT JOIN orcamentos o ON r.orcamento_id = o.id
+         LEFT JOIN departamentos dept ON o.departamento_id = dept.id
+         WHERE r.id = @rid`,
+        { rid: despesa.rubrica_id }
+      );
+      if (rubricaWHResult.length > 0) {
+        webhookData.rubrica_nome = rubricaWHResult[0].rubrica_nome;
+        webhookData.departamento_id = rubricaWHResult[0].departamento_id;
+        webhookData.departamento_nome = rubricaWHResult[0].departamento_nome;
+      }
+    }
+
+    // Fetch fornecedor info
+    if (despesa.fornecedor_id) {
+      const fornWHResult = await executeQuery<any>(
+        `SELECT nome, nif, email, telefone FROM fornecedores WHERE id = @fid`,
+        { fid: despesa.fornecedor_id }
+      );
+      if (fornWHResult.length > 0) {
+        webhookData.fornecedor_nome = fornWHResult[0].nome;
+        webhookData.fornecedor_nif = fornWHResult[0].nif;
+        webhookData.fornecedor_email = fornWHResult[0].email;
+        webhookData.fornecedor_telefone = fornWHResult[0].telefone;
+      }
+    }
+
+    // Fetch all aprovacoes for this despesa (including the new one)
+    const todasAprovacoes = await executeQuery<any>(
+      `SELECT a.id, a.aprovado_por, a.role, a.status, a.comentario, a.nivel_aprovacao, a.aprovado_em,
+              u.nome as aprovador_nome, u.email as aprovador_email, u.role as aprovador_role
+       FROM aprovacoes a
+       LEFT JOIN usuarios u ON a.aprovado_por = u.id
+       WHERE a.despesa_id = @did
+       ORDER BY a.aprovado_em ASC`,
+      { did: despesa.id }
+    );
+    webhookData.todas_aprovacoes = todasAprovacoes.map((a: any) => ({
+      id: a.id,
+      aprovado_por: a.aprovado_por,
+      aprovador_nome: a.aprovador_nome,
+      aprovador_email: a.aprovador_email,
+      aprovador_role: a.aprovador_role,
+      role: a.role,
+      status: a.status,
+      nivel_aprovacao: a.nivel_aprovacao,
+      comentario: a.comentario,
+      aprovado_em: a.aprovado_em,
+      aprovado_em_formatado: formatDateWAT(a.aprovado_em)
+    }));
+
+    // Next approvers (hoisted from notification block above)
+    webhookData.proximos_aprovadores = proximosAprovadores.map((p: any) => ({
+      id: p.id,
+      nome: p.nome,
+      email: p.email
+    }));
+
+    await sendAprovacaoToWebhook(webhookData);
+
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating aprovacao:', error);

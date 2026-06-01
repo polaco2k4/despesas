@@ -137,6 +137,10 @@ const Frotas: React.FC = () => {
   }, [activeTab]);
 
   useEffect(() => {
+    fetchRelatorios();
+  }, []);
+
+  useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
       if (!target.closest('.condutor-autocomplete')) {
@@ -781,6 +785,54 @@ const Frotas: React.FC = () => {
         )}
       </div>
 
+      {relatorios && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-blue-600">Total de Veículos</p>
+                <p className="text-3xl font-bold text-blue-900 mt-2">{relatorios.totalVeiculos}</p>
+                <p className="text-xs text-blue-600 mt-1">{relatorios.veiculosAtivos} ativos</p>
+              </div>
+              <Car className="text-blue-500" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border border-orange-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-orange-600">Manutenções</p>
+                <p className="text-3xl font-bold text-orange-900 mt-2">{relatorios.totalManutencoes}</p>
+                <p className="text-xs text-orange-600 mt-1">Kz {relatorios.custoManutencoes.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
+              </div>
+              <Wrench className="text-orange-500" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-green-600">Abastecimentos</p>
+                <p className="text-3xl font-bold text-green-900 mt-2">{relatorios.totalAbastecimentos}</p>
+                <p className="text-xs text-green-600 mt-1">{relatorios.totalLitros.toFixed(2)} L</p>
+              </div>
+              <Fuel className="text-green-500" size={40} />
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-600">Custo Total</p>
+                <p className="text-3xl font-bold text-purple-900 mt-2">Kz {(relatorios.custoTotal / 1000).toFixed(1)}K</p>
+                <p className="text-xs text-purple-600 mt-1">Operacional</p>
+              </div>
+              <BarChart3 className="text-purple-500" size={40} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
@@ -1302,52 +1354,6 @@ const Frotas: React.FC = () => {
                   Gerar PDF
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-600">Total de Veículos</p>
-                      <p className="text-3xl font-bold text-blue-900 mt-2">{relatorios.totalVeiculos}</p>
-                      <p className="text-xs text-blue-600 mt-1">{relatorios.veiculosAtivos} ativos</p>
-                    </div>
-                    <Car className="text-blue-500" size={40} />
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-6 border border-orange-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-orange-600">Manutenções</p>
-                      <p className="text-3xl font-bold text-orange-900 mt-2">{relatorios.totalManutencoes}</p>
-                      <p className="text-xs text-orange-600 mt-1">Kz {relatorios.custoManutencoes.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
-                    </div>
-                    <Wrench className="text-orange-500" size={40} />
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-green-600">Abastecimentos</p>
-                      <p className="text-3xl font-bold text-green-900 mt-2">{relatorios.totalAbastecimentos}</p>
-                      <p className="text-xs text-green-600 mt-1">{relatorios.totalLitros.toFixed(2)} L</p>
-                    </div>
-                    <Fuel className="text-green-500" size={40} />
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-purple-600">Custo Total</p>
-                      <p className="text-3xl font-bold text-purple-900 mt-2">Kz {(relatorios.custoTotal / 1000).toFixed(1)}K</p>
-                      <p className="text-xs text-purple-600 mt-1">Operacional</p>
-                    </div>
-                    <BarChart3 className="text-purple-500" size={40} />
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white rounded-lg border border-gray-200 p-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumo de Custos</h3>

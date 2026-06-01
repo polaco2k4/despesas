@@ -20,7 +20,7 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, 
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 // Register Chart.js components
 ChartJS.register(
@@ -34,13 +34,6 @@ ChartJS.register(
   Tooltip,
   Legend
 );
-
-// Extend jsPDF type to include autoTable
-declare module 'jspdf' {
-  interface jsPDF {
-    autoTable: (options: any) => jsPDF;
-  }
-}
 
 // Define chart options type
 type ChartOptions = {
@@ -240,7 +233,7 @@ const Relatorios: React.FC = () => {
         new Date(despesa.created_at).toLocaleDateString('pt-PT')
       ]);
       
-      doc.autoTable({
+      autoTable(doc, {
         startY: yPos,
         head: [['Descrição', 'Utilizador', 'Rubrica', 'Valor', 'Status', 'Data']],
         body: tableData,

@@ -6,6 +6,40 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
+const WEBHOOK_URL_DESPESAS = 'https://hook.eu2.make.com/yxbxiw2993rsk2ng2sus3t8p4xs4e79u';
+
+const formatDateWAT = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+  try {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '';
+    const options: Intl.DateTimeFormatOptions = {
+      day: 'numeric', month: 'long', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+      timeZone: 'Africa/Lagos', hour12: false
+    };
+    return new Intl.DateTimeFormat('pt-PT', options).format(d).replace(',', '');
+  } catch { return ''; }
+};
+
+const sendDespesaToWebhook = async (action: string, data: any) => {
+  try {
+    console.log(`📤 Sending despesa webhook [${action}]:`, data.id);
+    const response = await fetch(WEBHOOK_URL_DESPESAS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, type: 'despesa', data })
+    });
+    if (!response.ok) {
+      console.error('❌ Despesa webhook error:', response.status, await response.text());
+    } else {
+      console.log('✅ Despesa webhook sent successfully');
+    }
+  } catch (error) {
+    console.error('❌ Error sending despesa to webhook:', error);
+  }
+};
+
 // Configure multer for despesa file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -459,6 +493,8 @@ export const createDespesa = async (req: Request, res: Response) => {
     
     const rubricaResult = await executeQuery(rubricaQuery, { rubrica_id });
     
+    let gestoresParaWebhook: any[] = [];
+
     if (rubricaResult.length > 0) {
       const rubricaInfo = rubricaResult[0];
       
@@ -472,6 +508,8 @@ export const createDespesa = async (req: Request, res: Response) => {
       const gestores = await executeQuery(gestoresQuery, { 
         departamento_id: rubricaInfo.departamento_id 
       });
+
+      gestoresParaWebhook = gestores as any[];
       
       // Criar notificações para cada gestor
       for (const gestor of gestores) {
@@ -486,6 +524,57 @@ export const createDespesa = async (req: Request, res: Response) => {
       }
     }
     
+    // Build enriched webhook payload
+    const webhookPayload: any = { ...novaDespesa };
+
+    // Rubrica and departamento (already fetched above)
+    if (rubricaResult.length > 0) {
+      webhookPayload.rubrica_nome = rubricaResult[0].rubrica_nome;
+      webhookPayload.departamento_id = rubricaResult[0].departamento_id;
+      webhookPayload.departamento_nome = rubricaResult[0].departamento_nome;
+    }
+
+    // Fetch usuario info
+    const usuarioWHResult = await executeQuery<any>(
+      `SELECT nome, email, role FROM usuarios WHERE id = @uid`,
+      { uid: usuario_id }
+    );
+    if (usuarioWHResult.length > 0) {
+      webhookPayload.usuario_nome = usuarioWHResult[0].nome;
+      webhookPayload.usuario_email = usuarioWHResult[0].email;
+      webhookPayload.usuario_role = usuarioWHResult[0].role;
+    }
+
+    // Fetch fornecedor info
+    if (fornecedor_id) {
+      const fornWHResult = await executeQuery<any>(
+        `SELECT nome, nif, email, telefone FROM fornecedores WHERE id = @fid`,
+        { fid: fornecedor_id }
+      );
+      if (fornWHResult.length > 0) {
+        webhookPayload.fornecedor_nome = fornWHResult[0].nome;
+        webhookPayload.fornecedor_nif = fornWHResult[0].nif;
+        webhookPayload.fornecedor_email = fornWHResult[0].email;
+        webhookPayload.fornecedor_telefone = fornWHResult[0].telefone;
+      }
+    }
+
+    // Aprovadores (gestores do departamento)
+    webhookPayload.aprovadores = gestoresParaWebhook.map((g: any) => ({
+      id: g.id,
+      nome: g.nome,
+      email: g.email
+    }));
+
+    // Format dates
+    webhookPayload.created_at_formatada = formatDateWAT(novaDespesa.created_at);
+    webhookPayload.updated_at_formatada = formatDateWAT(novaDespesa.updated_at);
+    if (novaDespesa.data_pagamento) {
+      webhookPayload.data_pagamento_formatada = formatDateWAT(novaDespesa.data_pagamento);
+    }
+
+    await sendDespesaToWebhook('create', webhookPayload);
+
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating despesa:', error);
@@ -587,6 +676,111 @@ export const updateDespesa = async (req: Request, res: Response) => {
       console.log(`Updated ${updates.anexos_urls.length} attachments for despesa ${id}`);
     }
     
+    // Build enriched webhook payload
+    const despesaAtualizada = result[0];
+    const wData: any = { ...despesaAtualizada };
+
+    // Fetch rubrica and departamento
+    if (despesaAtualizada.rubrica_id) {
+      const rubWHResult = await executeQuery<any>(
+        `SELECT r.nome as rubrica_nome, o.departamento_id, dept.nome as departamento_nome
+         FROM rubricas r
+         LEFT JOIN orcamentos o ON r.orcamento_id = o.id
+         LEFT JOIN departamentos dept ON o.departamento_id = dept.id
+         WHERE r.id = @rid`,
+        { rid: despesaAtualizada.rubrica_id }
+      );
+      if (rubWHResult.length > 0) {
+        wData.rubrica_nome = rubWHResult[0].rubrica_nome;
+        wData.departamento_id = rubWHResult[0].departamento_id;
+        wData.departamento_nome = rubWHResult[0].departamento_nome;
+      }
+    }
+
+    // Fetch usuario info
+    if (despesaAtualizada.usuario_id) {
+      const uWHResult = await executeQuery<any>(
+        `SELECT nome, email, role FROM usuarios WHERE id = @uid`,
+        { uid: despesaAtualizada.usuario_id }
+      );
+      if (uWHResult.length > 0) {
+        wData.usuario_nome = uWHResult[0].nome;
+        wData.usuario_email = uWHResult[0].email;
+        wData.usuario_role = uWHResult[0].role;
+      }
+    }
+
+    // Fetch fornecedor info
+    if (despesaAtualizada.fornecedor_id) {
+      const fWHResult = await executeQuery<any>(
+        `SELECT nome, nif, email, telefone FROM fornecedores WHERE id = @fid`,
+        { fid: despesaAtualizada.fornecedor_id }
+      );
+      if (fWHResult.length > 0) {
+        wData.fornecedor_nome = fWHResult[0].nome;
+        wData.fornecedor_nif = fWHResult[0].nif;
+        wData.fornecedor_email = fWHResult[0].email;
+        wData.fornecedor_telefone = fWHResult[0].telefone;
+      }
+    }
+
+    // Fetch pago_por info
+    if (despesaAtualizada.pago_por) {
+      const ppWHResult = await executeQuery<any>(
+        `SELECT nome, email FROM usuarios WHERE id = @pid`,
+        { pid: despesaAtualizada.pago_por }
+      );
+      if (ppWHResult.length > 0) {
+        wData.pago_por_nome = ppWHResult[0].nome;
+        wData.pago_por_email = ppWHResult[0].email;
+      }
+    }
+
+    // Fetch gestores (aprovadores pendentes) do departamento
+    if (wData.departamento_id) {
+      const gestoresWHResult = await executeQuery<any>(
+        `SELECT id, nome, email FROM usuarios WHERE role = 'gestor' AND departamento_id = @dept_id`,
+        { dept_id: wData.departamento_id }
+      );
+      wData.aprovadores = gestoresWHResult.map((g: any) => ({
+        id: g.id,
+        nome: g.nome,
+        email: g.email
+      }));
+    }
+
+    // Fetch aprovacoes with aprovador details
+    const aprovWHResult = await executeQuery<any>(
+      `SELECT a.id, a.aprovado_por, a.role, a.status, a.comentario, a.aprovado_em,
+              u.nome as aprovador_nome, u.email as aprovador_email, u.role as aprovador_role
+       FROM aprovacoes a
+       LEFT JOIN usuarios u ON a.aprovado_por = u.id
+       WHERE a.despesa_id = @did
+       ORDER BY a.aprovado_em ASC`,
+      { did: despesaAtualizada.id }
+    );
+    wData.aprovacoes = aprovWHResult.map((a: any) => ({
+      id: a.id,
+      aprovado_por: a.aprovado_por,
+      aprovador_nome: a.aprovador_nome,
+      aprovador_email: a.aprovador_email,
+      aprovador_role: a.aprovador_role,
+      role: a.role,
+      status: a.status,
+      comentario: a.comentario,
+      aprovado_em: a.aprovado_em,
+      aprovado_em_formatado: formatDateWAT(a.aprovado_em)
+    }));
+
+    // Format dates
+    wData.created_at_formatada = formatDateWAT(despesaAtualizada.created_at);
+    wData.updated_at_formatada = formatDateWAT(despesaAtualizada.updated_at);
+    if (despesaAtualizada.data_pagamento) {
+      wData.data_pagamento_formatada = formatDateWAT(despesaAtualizada.data_pagamento);
+    }
+
+    await sendDespesaToWebhook('update', wData);
+
     res.json(result[0]);
   } catch (error) {
     console.error('Error updating despesa:', error);

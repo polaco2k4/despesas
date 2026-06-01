@@ -4,29 +4,42 @@ import { sanitizeActaFields, detectMaliciousPatterns } from '../utils/sanitize.j
 
 const WEBHOOK_URL = 'https://hook.eu2.make.com/x9t6rnvlq94vt3y7d65t99rdyyknu175';
 
-const sendToWebhook = async (data: any) => {
+const sendToWebhook = async (data: any): Promise<string | null> => {
   try {
     console.log('📤 Sending to webhook:', JSON.stringify(data, null, 2));
-    
+
     const response = await fetch(WEBHOOK_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
-    
+
     const responseText = await response.text();
-    
+
     if (!response.ok) {
-      console.error('❌ Webhook error:', response.status, response.statusText);
-      console.error('Response body:', responseText);
-    } else {
-      console.log('✅ Webhook sent successfully');
-      console.log('Response:', responseText);
+      console.error('❌ Webhook error:', response.status, response.statusText, responseText);
+      return null;
+    }
+
+    console.log('✅ Webhook sent successfully. Response:', responseText);
+
+    // Try to extract the Teams join URL from the response
+    try {
+      const parsed = JSON.parse(responseText);
+      const joinUrl =
+        parsed.joinUrl || parsed.joinWebUrl || parsed.join_url ||
+        parsed.meetingUrl || parsed.link || parsed.url || null;
+      if (joinUrl) console.log('🔗 Teams join URL received:', joinUrl);
+      return joinUrl;
+    } catch {
+      // Response is plain text — check if it looks like a URL
+      const trimmed = responseText.trim();
+      if (trimmed.startsWith('http')) return trimmed;
+      return null;
     }
   } catch (error) {
     console.error('❌ Error sending to webhook:', error);
+    return null;
   }
 };
 
@@ -65,11 +78,14 @@ export const getAllReunioes = async (req: Request, res: Response) => {
     
     const params: Record<string, any> = {};
     
-    // Colaborador only sees meetings they participate in
-    if (userRole === 'colaborador' && userId) {
-      query += ` AND EXISTS (
-        SELECT 1 FROM reunioes_participantes rp 
-        WHERE rp.reuniao_id = r.id AND rp.usuario_id = @user_id
+    // Colaborador, gestor and adm_area only see meetings they convoked or participate in
+    if ((userRole === 'colaborador' || userRole === 'gestor' || userRole === 'adm_area') && userId) {
+      query += ` AND (
+        r.convocador_id = @user_id
+        OR EXISTS (
+          SELECT 1 FROM reunioes_participantes rp
+          WHERE rp.reuniao_id = r.id AND rp.usuario_id = @user_id
+        )
       )`;
       params.user_id = userId;
     }
@@ -444,10 +460,21 @@ export const createReuniao = async (req: Request, res: Response) => {
       participantes: allParticipantes
     };
     
-    sendToWebhook(webhookData).catch(err => 
-      console.error('Webhook error (non-blocking):', err)
-    );
-    
+    // Send to webhook and capture the generated Teams join URL
+    const joinUrl = await sendToWebhook(webhookData).catch(err => {
+      console.error('Webhook error (non-blocking):', err);
+      return null;
+    });
+
+    // If Make.com returned a join URL, save it to the database
+    if (joinUrl) {
+      await executeQuery(
+        'UPDATE reunioes SET link_reuniao = @link WHERE id = @id',
+        { link: joinUrl, id: reuniao.id }
+      );
+      reuniao.link_reuniao = joinUrl;
+    }
+
     return res.status(201).json(reuniao);
   } catch (error: any) {
     console.error('❌ Error creating reuniao:', error);
@@ -849,10 +876,20 @@ export const updateReuniao = async (req: Request, res: Response) => {
       participantes: allParticipantes
     };
     
-    sendToWebhook(webhookData).catch(err => 
-      console.error('Webhook error (non-blocking):', err)
-    );
-    
+    // Send to webhook and capture the generated Teams join URL (if regenerated)
+    const joinUrl = await sendToWebhook(webhookData).catch(err => {
+      console.error('Webhook error (non-blocking):', err);
+      return null;
+    });
+
+    if (joinUrl) {
+      await executeQuery(
+        'UPDATE reunioes SET link_reuniao = @link WHERE id = @id',
+        { link: joinUrl, id }
+      );
+      updatedReuniao[0].link_reuniao = joinUrl;
+    }
+
     return res.json(updatedReuniao[0]);
   } catch (error: any) {
     console.error('❌ Error updating reuniao:', error);
@@ -871,20 +908,54 @@ export const updateReuniao = async (req: Request, res: Response) => {
 export const deleteReuniao = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     const result = await executeQuery(
       'DELETE FROM reunioes OUTPUT DELETED.* WHERE id = @id',
       { id }
     );
-    
+
     if (result.length === 0) {
       return res.status(404).json({ error: 'Reunião não encontrada' });
     }
-    
+
     return res.json({ message: 'Reunião excluída com sucesso' });
   } catch (error) {
     console.error('Error deleting reuniao:', error);
     return res.status(500).json({ error: 'Erro ao excluir reunião' });
+  }
+};
+
+// Callback endpoint called by Make.com after creating the Teams meeting
+export const updateReuniaoLink = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    // Make.com can send the link in several field names
+    const link =
+      req.body.joinUrl ||
+      req.body.joinWebUrl ||
+      req.body.join_url ||
+      req.body.meetingUrl ||
+      req.body.link ||
+      req.body.url;
+
+    if (!link) {
+      return res.status(400).json({ error: 'Campo de link não encontrado no body' });
+    }
+
+    const result = await executeQuery(
+      'UPDATE reunioes SET link_reuniao = @link, updated_at = GETDATE() OUTPUT INSERTED.* WHERE id = @id',
+      { link, id }
+    );
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Reunião não encontrada' });
+    }
+
+    console.log(`🔗 Teams link saved for meeting ${id}: ${link}`);
+    return res.json({ message: 'Link guardado com sucesso', link_reuniao: link });
+  } catch (error) {
+    console.error('Error saving meeting link:', error);
+    return res.status(500).json({ error: 'Erro ao guardar link da reunião' });
   }
 };
 
@@ -910,11 +981,14 @@ export const getAllActas = async (req: Request, res: Response) => {
     
     const params: Record<string, any> = {};
     
-    // Colaborador only sees actas from meetings they participated in
-    if (userRole === 'colaborador' && userId) {
-      query += ` AND EXISTS (
-        SELECT 1 FROM reunioes_participantes rp 
-        WHERE rp.reuniao_id = a.reuniao_id AND rp.usuario_id = @user_id
+    // Colaborador, gestor and adm_area only see actas from meetings they convoked or participated in
+    if ((userRole === 'colaborador' || userRole === 'gestor' || userRole === 'adm_area') && userId) {
+      query += ` AND (
+        r.convocador_id = @user_id
+        OR EXISTS (
+          SELECT 1 FROM reunioes_participantes rp
+          WHERE rp.reuniao_id = a.reuniao_id AND rp.usuario_id = @user_id
+        )
       )`;
       params.user_id = userId;
     }
@@ -1200,11 +1274,14 @@ export const getAllAcoes = async (req: Request, res: Response) => {
     
     const params: Record<string, any> = {};
     
-    // Colaborador only sees actions from meetings they participated in
-    if (userRole === 'colaborador' && userId) {
-      query += ` AND EXISTS (
-        SELECT 1 FROM reunioes_participantes rp 
-        WHERE rp.reuniao_id = r.id AND rp.usuario_id = @user_id
+    // Colaborador, gestor and adm_area only see actions from meetings they convoked or participated in
+    if ((userRole === 'colaborador' || userRole === 'gestor' || userRole === 'adm_area') && userId) {
+      query += ` AND (
+        r.convocador_id = @user_id
+        OR EXISTS (
+          SELECT 1 FROM reunioes_participantes rp
+          WHERE rp.reuniao_id = r.id AND rp.usuario_id = @user_id
+        )
       )`;
       params.user_id = userId;
     }

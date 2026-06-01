@@ -5,6 +5,7 @@ import {
   createReuniao,
   updateReuniao,
   deleteReuniao,
+  updateReuniaoLink,
   getAllActas,
   getActaById,
   createActa,
@@ -23,6 +24,7 @@ router.get('/reunioes/:id', getReuniaoById);
 router.post('/reunioes', createReuniao);
 router.put('/reunioes/:id', updateReuniao);
 router.delete('/reunioes/:id', deleteReuniao);
+router.post('/reunioes/:id/link', updateReuniaoLink);
 
 router.get('/actas', getAllActas);
 router.get('/actas/:id', getActaById);

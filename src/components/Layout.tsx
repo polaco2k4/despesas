@@ -265,7 +265,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Footer */}
         <footer className="bg-white border-t border-gray-100 px-6 py-4">
           <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
-            <div> SIGE - Sistema Integrado de Gestão Empresarial, by AZFBUSINESS</div>
+            <div> SIGE - Sistema Integrado de Gestão Empresarial, by EGATE CLOUD</div>
             <div className="mt-2 md:mt-0">
               <span className="inline-flex items-center">
                 <span className="w-2 h-2 rounded-full bg-green-400 mr-2 animate-pulse"></span>
