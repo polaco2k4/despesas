@@ -264,7 +264,10 @@ export const despesasAPI = {
 
 export const aprovacoesAPI = {
   getAll: () => fetchAPI<any[]>('/aprovacoes'),
-  
+
+  getConfig: () =>
+    fetchAPI<{ planeamento_departamento_id: string | null }>('/aprovacoes/config'),
+
   create: (data: any) =>
     fetchAPI<any>('/aprovacoes', {
       method: 'POST',

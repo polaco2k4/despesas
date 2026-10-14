@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import type { Despesa, DespesaStatus } from '../types/database.js';
 import { criarNotificacao } from './notificacoesController.js';
+import { getPlaneamentoDeptId, sameGuid } from './aprovacoesController.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -193,7 +194,17 @@ export const getAllDespesas = async (req: Request, res: Response) => {
       params.usuario_id = usuario_id;
     }
     
-    if (departamento_id) {
+    // Gestor de Planeamento: além do próprio departamento, vê as despesas de todos os
+    // departamentos que já passaram o nível 1, e as que aprovou/negou no nível 2
+    const isGestorPlaneamento = user_role === 'gestor' &&
+      sameGuid(user_departamento_id, getPlaneamentoDeptId());
+
+    if (departamento_id && isGestorPlaneamento) {
+      whereClause += ` AND (dept.id = @departamento_id
+        OR d.status IN ('pendente_admin', 'pendente_adm_area', 'aprovada', 'paga')
+        OR d.id IN (SELECT despesa_id FROM aprovacoes WHERE nivel_aprovacao = 2))`;
+      params.departamento_id = departamento_id;
+    } else if (departamento_id) {
       whereClause += ' AND dept.id = @departamento_id';
       params.departamento_id = departamento_id;
     }

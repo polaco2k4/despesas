@@ -89,11 +89,25 @@ const Despesas: React.FC = () => {
   });
   const [editingAnexos, setEditingAnexos] = useState<File[]>([]);
   const [despesaAnexos, setDespesaAnexos] = useState<Array<{ id: string; anexo_url: string }>>([]);
+  const [planeamentoDeptId, setPlaneamentoDeptId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
     fetchFornecedores();
+    fetchAprovacoesConfig();
   }, []);
+
+  const fetchAprovacoesConfig = async () => {
+    try {
+      const config = await aprovacoesAPI.getConfig();
+      setPlaneamentoDeptId(config.planeamento_departamento_id);
+    } catch (error) {
+      console.error('Error fetching aprovacoes config:', error);
+    }
+  };
+
+  const sameGuid = (a?: string | null, b?: string | null) =>
+    !!a && !!b && a.toUpperCase() === b.toUpperCase();
 
   const fetchFornecedores = async () => {
     try {
@@ -338,7 +352,6 @@ const Despesas: React.FC = () => {
       await aprovacoesAPI.create({
         despesa_id: despesaId,
         aprovado_por: userProfile.id,
-        role: userProfile.role,
         status,
         comentario
       });
@@ -550,7 +563,7 @@ const Despesas: React.FC = () => {
       case 'negada': return 'Negada';
       case 'rejeitada': return 'Rejeitada';
       case 'pendente_gestor': return 'Pendente - Gestor';
-      case 'pendente_admin': return 'Pendente - Admin';
+      case 'pendente_admin': return 'Pendente - Planeamento';
       case 'pendente_adm_area': return 'Pendente - ADM Área';
       default: return status;
     }
@@ -587,20 +600,21 @@ const Despesas: React.FC = () => {
       });
       break;
     case 'pendente_admin':
-      resultado = userProfile.role === 'admin';
-      console.log('📋 Verificando pendente_admin:', {
+      // Nível 2: apenas o gestor do departamento de Planeamento
+      resultado = userProfile.role === 'gestor' && sameGuid(userProfile.departamento_id, planeamentoDeptId);
+      console.log('📋 Verificando pendente_admin (Planeamento):', {
         userRole: userProfile.role,
+        userDepto: userProfile.departamento_id,
+        planeamentoDeptId,
         resultado
       });
       break;
     case 'pendente_adm_area':
       if (userProfile.role === 'adm_area') {
         // Check if user has multiple departments assigned
+        // O backend só considera usuarios_departamentos (sem fallback para departamento_id)
         if (userProfile.departamentos && userProfile.departamentos.length > 0) {
           resultado = userProfile.departamentos.some(dept => dept.id === despesa.rubrica?.orcamento?.departamento_id);
-        } else if (userProfile.departamento_id) {
-          // Fallback to single department
-          resultado = userProfile.departamento_id === despesa.rubrica?.orcamento?.departamento_id;
         } else {
           // If no departments assigned, cannot approve (security measure)
           resultado = false;
@@ -626,7 +640,7 @@ const Despesas: React.FC = () => {
 };
 
   const canCreateDespesa = userProfile?.role === 'colaborador';
-  const canApprove = userProfile?.role === 'gestor' || userProfile?.role === 'admin' || userProfile?.role === 'adm_area';
+  const canApprove = userProfile?.role === 'gestor' || userProfile?.role === 'adm_area';
 
   const filteredDespesas = despesas.filter(despesa => {
     const matchesSearch = despesa.descricao.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -715,7 +729,7 @@ const Despesas: React.FC = () => {
             >
               <option value="">Todos os status</option>
               <option value="pendente_gestor">Pendente - Gestor</option>
-              <option value="pendente_admin">Pendente - Admin</option>
+              <option value="pendente_admin">Pendente - Planeamento</option>
               <option value="pendente_adm_area">Pendente - ADM Área</option>
               <option value="aprovada">Aprovada</option>
               <option value="rejeitada">Rejeitada</option>

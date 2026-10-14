@@ -19,6 +19,23 @@ const formatDateWAT = (date: Date | string | null | undefined): string => {
   } catch { return ''; }
 };
 
+// Nível 2 é aprovado apenas pelo gestor do departamento de Planeamento
+export const getPlaneamentoDeptId = (): string | null => {
+  const id = process.env.PLANEAMENTO_DEPARTAMENTO_ID?.trim();
+  return id ? id.toUpperCase() : null;
+};
+
+export const sameGuid = (a: any, b: any): boolean =>
+  !!a && !!b && a.toString().toUpperCase() === b.toString().toUpperCase();
+
+if (!getPlaneamentoDeptId()) {
+  console.warn('⚠️ PLANEAMENTO_DEPARTAMENTO_ID não definido no .env — aprovações de nível 2 serão bloqueadas');
+}
+
+export const getAprovacoesConfig = async (req: Request, res: Response) => {
+  res.json({ planeamento_departamento_id: getPlaneamentoDeptId() });
+};
+
 const sendAprovacaoToWebhook = async (data: any) => {
   try {
     console.log(`📤 Sending aprovacao webhook:`, data.aprovacao_id);
@@ -54,18 +71,17 @@ export const getAllAprovacoes = async (req: Request, res: Response) => {
 
 export const createAprovacao = async (req: Request, res: Response) => {
   try {
-    const { despesa_id, aprovado_por, role, status, comentario } = req.body;
-    
-    console.log('🔍 createAprovacao debug:', { 
-      despesa_id, 
-      aprovado_por, 
-      role, 
-      status, 
+    const { despesa_id, aprovado_por, status, comentario } = req.body;
+
+    console.log('🔍 createAprovacao debug:', {
+      despesa_id,
+      aprovado_por,
+      status,
       comentario: comentario || 'null'
     });
-    
-    if (!despesa_id || !aprovado_por || !role || !status) {
-      return res.status(400).json({ error: 'Despesa, aprovador, role e status são obrigatórios' });
+
+    if (!despesa_id || !aprovado_por || !status) {
+      return res.status(400).json({ error: 'Despesa, aprovador e status são obrigatórios' });
     }
 
     // Buscar informações da despesa e do aprovador
@@ -97,7 +113,9 @@ export const createAprovacao = async (req: Request, res: Response) => {
     }
     
     const aprovador = aprovadores[0];
-    
+    // O role vem sempre da BD, nunca do pedido
+    const role = aprovador.role;
+
     // If user is adm_area, fetch their assigned departments
     let departamentosIds: string[] = [];
     if (aprovador.role === 'adm_area') {
@@ -134,10 +152,13 @@ export const createAprovacao = async (req: Request, res: Response) => {
       nivelAprovacao = 1;
       proximoStatus = status === 'aprovada' ? 'pendente_admin' : 'negada';
       console.log('✅ Aprovação nível 1 (Gestor) autorizada');
-    } else if (despesa.status === 'pendente_admin' && role === 'admin') {
+    } else if (despesa.status === 'pendente_admin' && role === 'gestor' && !getPlaneamentoDeptId()) {
+      return res.status(500).json({ error: 'Departamento de Planeamento não configurado' });
+    } else if (despesa.status === 'pendente_admin' && role === 'gestor' &&
+               sameGuid(aprovador.departamento_id, getPlaneamentoDeptId())) {
       nivelAprovacao = 2;
       proximoStatus = status === 'aprovada' ? 'pendente_adm_area' : 'negada';
-      console.log('✅ Aprovação nível 2 (Admin) autorizada');
+      console.log('✅ Aprovação nível 2 (Gestor de Planeamento) autorizada');
     } else if (despesa.status === 'pendente_adm_area' && role === 'adm_area' && 
                hasDepartmentAccess()) {
       nivelAprovacao = 3;
@@ -150,13 +171,8 @@ export const createAprovacao = async (req: Request, res: Response) => {
         user_depto: aprovador.departamento_id,
         user_departamentos: departamentosIds,
         despesa_depto: despesa.departamento_id,
-        has_access: hasDepartmentAccess(),
-        condicao1: despesa.status === 'pendente_gestor',
-        condicao2: role === 'gestor',
-        condicao3: aprovador.departamento_id === despesa.departamento_id,
-        condicao4: despesa.status === 'pendente_adm_area',
-        condicao5: role === 'adm_area',
-        condicao6: hasDepartmentAccess()
+        planeamento_depto: getPlaneamentoDeptId(),
+        has_access: hasDepartmentAccess()
       });
       return res.status(403).json({ error: 'Usuário não tem permissão para aprovar esta despesa neste nível' });
     }
@@ -200,13 +216,16 @@ export const createAprovacao = async (req: Request, res: Response) => {
     if (status === 'aprovada' && proximoStatus !== 'aprovada') {
       
       if (proximoStatus === 'pendente_admin') {
-        // Notificar admins
-        const adminsQuery = `
-          SELECT id, nome, email
-          FROM usuarios
-          WHERE role = 'admin'
-        `;
-        proximosAprovadores = await executeQuery(adminsQuery, {});
+        // Notificar o(s) gestor(es) de Planeamento
+        const planeamentoId = getPlaneamentoDeptId();
+        if (planeamentoId) {
+          const planeamentoQuery = `
+            SELECT id, nome, email
+            FROM usuarios
+            WHERE role = 'gestor' AND departamento_id = @planeamento_id
+          `;
+          proximosAprovadores = await executeQuery(planeamentoQuery, { planeamento_id: planeamentoId });
+        }
       } else if (proximoStatus === 'pendente_adm_area') {
         // Notificar ADMs da área do departamento
         const admAreaQuery = `
