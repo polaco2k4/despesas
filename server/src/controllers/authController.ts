@@ -14,14 +14,21 @@ export const login = async (req: Request, res: Response) => {
 
     // Primeiro, tenta autenticação AD
     const adAuthService = createADAuthService();
-    const adUser = await adAuthService.authenticateUser(email, password);
-    
-    if (adUser) {
+    const adResult = await adAuthService.authenticateUser(email, password);
+
+    if (adResult.status === 'ok') {
       console.log('🔐 AD Authentication successful for:', email);
-      
+
       // Verifica se usuário existe no banco local (NÃO cria automaticamente)
-      let localUser = await findLocalUser(adUser.email);
-      
+      let localUser = await findLocalUser(email);
+      if (!localUser && adResult.user.email && adResult.user.email.toLowerCase() !== String(email).toLowerCase()) {
+        localUser = await findLocalUser(adResult.user.email);
+      }
+      // Email local pode ter outro domínio (ex.: user@sdbd.lan no AD, user@empresa.co.ao na BD)
+      if (!localUser) {
+        localUser = await findLocalUserByUsername(adResult.user.username || String(email).split('@')[0]);
+      }
+
       if (localUser) {
         console.log('✅ User found in local database:', email);
         return res.json({ user: localUser });
@@ -31,8 +38,14 @@ export const login = async (req: Request, res: Response) => {
       }
     }
 
-    // Se AD falhar, tenta autenticação local (fallback)
-    console.log('🔄 Falling back to local authentication for:', email);
+    // Senha AD errada: só utilizadores com senha local podem continuar (validada abaixo).
+    // AD inacessível: fallback para autenticação local.
+    console.log(
+      adResult.status === 'invalid_credentials'
+        ? '🔄 AD rejected credentials, checking local account for:'
+        : '🔄 AD unavailable, falling back to local authentication for:',
+      email
+    );
     
     const query = `
       SELECT 
@@ -112,6 +125,37 @@ async function findLocalUser(email: string): Promise<any> {
     return null;
   } catch (error) {
     console.error('Error finding local user:', error);
+    return null;
+  }
+}
+
+/**
+ * Busca usuário local pela parte antes do @ (qualquer domínio).
+ * Só devolve se houver exatamente um resultado, para não confundir pessoas com o mesmo nome.
+ */
+async function findLocalUserByUsername(username: string): Promise<any> {
+  try {
+    const clean = username.split('\\').pop()!.split('@')[0].trim();
+    if (!clean) return null;
+
+    // Escapa curingas do LIKE (%, _, [) no nome de usuário
+    const pattern = clean.replace(/[%_[]/g, ch => `[${ch}]`) + '@%';
+    const results = await executeQuery(
+      `SELECT email FROM usuarios WHERE LOWER(email) LIKE LOWER(@pattern)`,
+      { pattern }
+    );
+
+    if (results.length !== 1) {
+      if (results.length > 1) {
+        console.log(`⚠️ Multiple local users match username "${clean}" - not resolving automatically`);
+      }
+      return null;
+    }
+
+    console.log(`🔗 AD user "${clean}" matched local user ${results[0].email}`);
+    return await findLocalUser(results[0].email);
+  } catch (error) {
+    console.error('Error finding local user by username:', error);
     return null;
   }
 }
