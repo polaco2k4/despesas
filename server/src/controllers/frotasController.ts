@@ -222,6 +222,7 @@ export const getAllManutencoes = async (req: Request, res: Response) => {
         v.matricula as veiculo_matricula,
         v.marca as veiculo_marca,
         v.modelo as veiculo_modelo,
+        v.quilometragem_atual as veiculo_quilometragem_atual,
         f.nome as fornecedor_nome,
         u.nome as responsavel_nome
       FROM manutencoes m
@@ -279,8 +280,8 @@ export const createManutencao = async (req: Request, res: Response) => {
       tipo, 
       descricao, 
       data_manutencao: data_manutencao ? new Date(data_manutencao) : new Date(),
-      quilometragem: quilometragem ? parseFloat(quilometragem) : null,
-      custo: parseFloat(custo), 
+      quilometragem: quilometragem !== undefined && quilometragem !== null && quilometragem !== '' ? parseFloat(quilometragem) : null,
+      custo: parseFloat(custo),
       fornecedor_id: fornecedor_id || null, 
       proximo_servico_km: proximo_servico_km ? parseFloat(proximo_servico_km) : null, 
       proximo_servico_data: proximo_servico_data ? new Date(proximo_servico_data) : null,
@@ -318,7 +319,7 @@ export const updateManutencao = async (req: Request, res: Response) => {
         if (field === 'data_manutencao' || field === 'proximo_servico_data') {
           params[field] = updates[field] ? new Date(updates[field]) : null;
         } else if (field === 'quilometragem' || field === 'custo' || field === 'proximo_servico_km') {
-          params[field] = updates[field] ? parseFloat(updates[field]) : null;
+          params[field] = updates[field] !== null && updates[field] !== '' ? parseFloat(updates[field]) : null;
         } else if (field === 'fornecedor_id' || field === 'responsavel_id' || field === 'observacoes') {
           params[field] = updates[field] || null;
         } else {
@@ -360,6 +361,17 @@ export const deleteManutencao = async (req: Request, res: Response) => {
     console.error('Error deleting manutencao:', error);
     res.status(500).json({ error: 'Erro ao deletar manutenção' });
   }
+};
+
+// Recalcula a quilometragem do veículo a partir do maior registo de abastecimento
+const recalcularQuilometragemVeiculo = async (veiculo_id: string) => {
+  await executeQuery(
+    `UPDATE veiculos
+     SET quilometragem_atual = m.max_km, updated_at = GETDATE()
+     FROM (SELECT MAX(quilometragem) AS max_km FROM abastecimentos WHERE veiculo_id = @veiculo_id) m
+     WHERE id = @veiculo_id AND m.max_km IS NOT NULL`,
+    { veiculo_id }
+  );
 };
 
 export const getAllAbastecimentos = async (req: Request, res: Response) => {
@@ -407,6 +419,21 @@ export const createAbastecimento = async (req: Request, res: Response) => {
       });
     }
 
+    // O conta-quilómetros não anda para trás: rejeitar km inferior à actual do veículo
+    const veiculo = await executeQuery(
+      `SELECT quilometragem_atual FROM veiculos WHERE id = @veiculo_id`,
+      { veiculo_id }
+    );
+    if (veiculo.length === 0) {
+      return res.status(404).json({ error: 'Veículo não encontrado' });
+    }
+    const kmAtual = Number(veiculo[0].quilometragem_atual) || 0;
+    if (parseFloat(quilometragem) < kmAtual) {
+      return res.status(400).json({
+        error: `Quilometragem (${parseFloat(quilometragem).toLocaleString('pt-PT')} km) inferior à actual do veículo (${kmAtual.toLocaleString('pt-PT')} km)`
+      });
+    }
+
     const query = `
       INSERT INTO abastecimentos (
         veiculo_id, data_abastecimento, quilometragem, litros, preco_litro,
@@ -436,9 +463,12 @@ export const createAbastecimento = async (req: Request, res: Response) => {
       observacoes: observacoes || null
     });
 
-    // Update vehicle mileage
+    // Update vehicle mileage (only if higher than current)
     await executeQuery(
-      `UPDATE veiculos SET quilometragem_atual = @quilometragem WHERE id = @veiculo_id`,
+      `UPDATE veiculos
+       SET quilometragem_atual = CASE WHEN @quilometragem > ISNULL(quilometragem_atual, 0) THEN @quilometragem ELSE quilometragem_atual END,
+           updated_at = GETDATE()
+       WHERE id = @veiculo_id`,
       { quilometragem: parseFloat(quilometragem), veiculo_id }
     );
     
@@ -496,7 +526,11 @@ export const updateAbastecimento = async (req: Request, res: Response) => {
     if (result.length === 0) {
       return res.status(404).json({ error: 'Abastecimento não encontrado' });
     }
-    
+
+    if (updates.quilometragem !== undefined) {
+      await recalcularQuilometragemVeiculo(result[0].veiculo_id);
+    }
+
     return res.json(result[0]);
   } catch (error) {
     console.error('Error updating abastecimento:', error);
@@ -507,8 +541,11 @@ export const updateAbastecimento = async (req: Request, res: Response) => {
 export const deleteAbastecimento = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const query = `DELETE FROM abastecimentos WHERE id = @id`;
-    await executeQuery(query, { id });
+    const query = `DELETE FROM abastecimentos OUTPUT DELETED.veiculo_id WHERE id = @id`;
+    const result = await executeQuery(query, { id });
+    if (result.length > 0) {
+      await recalcularQuilometragemVeiculo(result[0].veiculo_id);
+    }
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting abastecimento:', error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Car, 
@@ -14,9 +14,11 @@ import {
   Users,
   BarChart3,
   ClipboardList,
-  FileDown
+  FileDown,
+  AlertTriangle
 } from 'lucide-react';
 import { ManutencaoModal, AbastecimentoModal } from './Frotas_Modals';
+import { API_BASE_URL } from '../lib/backendApi';
 import jsPDF from 'jspdf';
 
 interface Veiculo {
@@ -47,6 +49,7 @@ interface Manutencao {
   id: string;
   veiculo_id: string;
   veiculo_matricula?: string;
+  veiculo_quilometragem_atual?: number;
   tipo: 'preventiva' | 'corretiva' | 'revisao' | 'inspecao';
   descricao: string;
   data_manutencao: string;
@@ -79,7 +82,50 @@ interface Abastecimento {
   observacoes?: string;
 }
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = API_BASE_URL;
+
+const INTERVALO_MANUTENCAO_KM = 5000;
+const ALERTA_MANUTENCAO_KM = 1000;
+
+interface AlertaManutencao {
+  kmBase: number;
+  kmDesde: number;
+  kmRestantes: number;
+  nivel: 'ok' | 'amarelo' | 'vermelho';
+}
+
+const calcularAlerta = (kmAtual: number, kmBase: number): AlertaManutencao => {
+  const kmDesde = kmAtual - kmBase;
+  const kmRestantes = INTERVALO_MANUTENCAO_KM - kmDesde;
+  const nivel = kmDesde > INTERVALO_MANUTENCAO_KM
+    ? 'vermelho'
+    : kmRestantes <= ALERTA_MANUTENCAO_KM ? 'amarelo' : 'ok';
+  return { kmBase, kmDesde, kmRestantes, nivel };
+};
+
+// Manutenção mais recente de cada veículo (maior data; desempate pela km)
+const ultimaManutencaoPorVeiculo = (lista: Manutencao[]) => {
+  const ultimas = new Map<string, Manutencao>();
+  lista.forEach((m) => {
+    const atual = ultimas.get(m.veiculo_id);
+    if (!atual) {
+      ultimas.set(m.veiculo_id, m);
+      return;
+    }
+    const diff = new Date(m.data_manutencao).getTime() - new Date(atual.data_manutencao).getTime();
+    if (diff > 0 || (diff === 0 && Number(m.quilometragem ?? 0) > Number(atual.quilometragem ?? 0))) {
+      ultimas.set(m.veiculo_id, m);
+    }
+  });
+  return ultimas;
+};
+
+const classeCartaoAlerta = (nivel?: AlertaManutencao['nivel']) =>
+  nivel === 'vermelho'
+    ? 'border-2 border-red-500 bg-red-50'
+    : nivel === 'amarelo'
+      ? 'border-2 border-yellow-400 bg-yellow-50'
+      : 'border border-gray-200';
 
 const Frotas: React.FC = () => {
   const { userProfile } = useAuth();
@@ -128,6 +174,35 @@ const Frotas: React.FC = () => {
   const [showCondutorAtribuicaoDropdown, setShowCondutorAtribuicaoDropdown] = useState(false);
   const [condutorSolicitacaoSearch, setCondutorSolicitacaoSearch] = useState('');
   const [showCondutorSolicitacaoDropdown, setShowCondutorSolicitacaoDropdown] = useState(false);
+
+  // Registo mais recente (não cancelado) de cada veículo — é o cartão que recebe o alerta
+  const ultimasManutencoes = useMemo(
+    () => ultimaManutencaoPorVeiculo(manutencoes.filter((m) => m.status !== 'cancelada')),
+    [manutencoes]
+  );
+
+  // Base da contagem: última manutenção concluída com km (ou 0 km se não houver)
+  const ultimasConcluidas = useMemo(
+    () => ultimaManutencaoPorVeiculo(manutencoes.filter((m) => m.status === 'concluida' && m.quilometragem != null)),
+    [manutencoes]
+  );
+
+  const alertasManutencao = useMemo(() => {
+    const alertas = new Map<string, AlertaManutencao>();
+    ultimasManutencoes.forEach((m) => {
+      if (m.veiculo_quilometragem_atual == null) return;
+      const kmBase = Number(ultimasConcluidas.get(m.veiculo_id)?.quilometragem ?? 0);
+      alertas.set(m.id, calcularAlerta(Number(m.veiculo_quilometragem_atual), kmBase));
+    });
+    return alertas;
+  }, [ultimasManutencoes, ultimasConcluidas]);
+
+  // Veículos sem manutenção registada: os 5000 km contam desde 0 km
+  const veiculosSemManutencao = useMemo(() => {
+    return veiculos
+      .filter((v) => v.status !== 'inativo' && v.status !== 'abatido' && !ultimasManutencoes.has(v.id))
+      .map((v) => ({ veiculo: v, alerta: calcularAlerta(Number(v.quilometragem_atual) || 0, 0) }));
+  }, [veiculos, ultimasManutencoes]);
 
   useEffect(() => {
     fetchData();
@@ -205,12 +280,17 @@ const Frotas: React.FC = () => {
         const data = await response.json();
         setVeiculos(Array.isArray(data) ? data : []);
       } else if (activeTab === 'manutencoes') {
-        const response = await fetch(`${API_URL}/frotas/manutencoes`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        const [response, veiculosResponse] = await Promise.all([
+          fetch(`${API_URL}/frotas/manutencoes`),
+          fetch(`${API_URL}/frotas/veiculos`)
+        ]);
+        if (!response.ok || !veiculosResponse.ok) {
+          throw new Error(`HTTP error! status: ${response.status}/${veiculosResponse.status}`);
         }
         const data = await response.json();
+        const veiculosData = await veiculosResponse.json();
         setManutencoes(Array.isArray(data) ? data : []);
+        setVeiculos(Array.isArray(veiculosData) ? veiculosData : []);
       } else if (activeTab === 'abastecimentos') {
         const response = await fetch(`${API_URL}/frotas/abastecimentos`);
         if (!response.ok) {
@@ -431,9 +511,13 @@ const Frotas: React.FC = () => {
         setEditingAbastecimento({});
         setIsEditingAbastecimento(false);
         await fetchData();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        alert(data.error || 'Erro ao guardar abastecimento');
       }
     } catch (error) {
       console.error('Error saving abastecimento:', error);
+      alert('Erro ao guardar abastecimento');
     }
   };
 
@@ -1033,8 +1117,37 @@ const Frotas: React.FC = () => {
 
           {activeTab === 'manutencoes' && (
             <div className="space-y-4">
-              {manutencoes.map((manutencao) => (
-                <div key={manutencao.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              {veiculosSemManutencao.map(({ veiculo, alerta }) => (
+                <div key={`sem-manutencao-${veiculo.id}`} className={`${classeCartaoAlerta(alerta.nivel)} rounded-lg p-4`}>
+                  <div className="flex items-center space-x-3">
+                    <Car className="text-gray-500" size={20} />
+                    <h3 className="text-sm font-medium text-gray-900">
+                      {veiculo.matricula} · Sem manutenção registada
+                    </h3>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">{veiculo.marca} {veiculo.modelo}</p>
+                  <div className={`mt-3 flex items-start space-x-2 text-sm ${
+                    alerta.nivel === 'vermelho' ? 'text-red-800' : alerta.nivel === 'amarelo' ? 'text-yellow-800' : 'text-gray-700'
+                  }`}>
+                    {alerta.nivel !== 'ok' && <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />}
+                    <div>
+                      <p className="font-semibold">
+                        {alerta.nivel === 'vermelho'
+                          ? `1ª manutenção excedida em ${Math.abs(alerta.kmRestantes).toLocaleString('pt-PT')} km`
+                          : `Faltam ${alerta.kmRestantes.toLocaleString('pt-PT')} km para a 1ª manutenção`}
+                      </p>
+                      <p className="text-xs">
+                        Km actual: {(Number(veiculo.quilometragem_atual) || 0).toLocaleString('pt-PT')} km
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {manutencoes.map((manutencao) => {
+                const alerta = alertasManutencao.get(manutencao.id);
+                const cardClass = classeCartaoAlerta(alerta?.nivel);
+                return (
+                <div key={manutencao.id} className={`${cardClass} rounded-lg p-4 hover:shadow-md transition-shadow`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3">
@@ -1059,6 +1172,23 @@ const Frotas: React.FC = () => {
                           <p className="font-medium">Kz {manutencao.custo.toLocaleString('pt-PT', { minimumFractionDigits: 2 })}</p>
                         </div>
                       </div>
+                      {alerta && alerta.nivel !== 'ok' && (
+                        <div className={`mt-3 flex items-start space-x-2 text-sm ${
+                          alerta.nivel === 'vermelho' ? 'text-red-800' : 'text-yellow-800'
+                        }`}>
+                          <AlertTriangle size={18} className="flex-shrink-0 mt-0.5" />
+                          <div>
+                            <p className="font-semibold">
+                              {alerta.nivel === 'vermelho'
+                                ? `Manutenção excedida em ${Math.abs(alerta.kmRestantes).toLocaleString('pt-PT')} km`
+                                : `Faltam ${alerta.kmRestantes.toLocaleString('pt-PT')} km para a próxima manutenção`}
+                            </p>
+                            <p className="text-xs">
+                              Km actual: {Number(manutencao.veiculo_quilometragem_atual).toLocaleString('pt-PT')} km · Km da última manutenção concluída: {alerta.kmBase.toLocaleString('pt-PT')} km
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -1102,8 +1232,9 @@ const Frotas: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              ))}
-              {manutencoes.length === 0 && (
+                );
+              })}
+              {manutencoes.length === 0 && veiculosSemManutencao.length === 0 && (
                 <div className="text-center py-12">
                   <Wrench className="mx-auto h-12 w-12 text-gray-400" />
                   <h3 className="mt-2 text-sm font-medium text-gray-900">Nenhuma manutenção registrada</h3>
