@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
 import { expedientesAPI, departamentosAPI, usuariosAPI, documentosAPI } from '../lib/backendApi';
 import { 
@@ -24,6 +25,7 @@ import { AlertDialog } from './ui/AlertDialog';
 import type { Expediente, Departamento, Usuario } from '../types/database';
 
 const Expedientes: React.FC = () => {
+  const { confirm } = useFeedback();
   const { userProfile } = useAuth();
   const [expedientes, setExpedientes] = useState<Expediente[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -350,7 +352,7 @@ const Expedientes: React.FC = () => {
   };
 
   const handleDeleteExpediente = async (expediente: Expediente) => {
-    if (!confirm('Tem certeza que deseja excluir este expediente?')) return;
+    if (!await confirm({ title: 'Excluir este expediente?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Excluir', variant: 'danger' })) return;
 
     try {
       await expedientesAPI.delete(expediente.id);
@@ -574,7 +576,7 @@ const Expedientes: React.FC = () => {
   const handleRemoveDocumento = async (documentoId: string) => {
     if (!selectedExpediente) return;
     
-    if (!confirm('Tem certeza que deseja remover este documento do expediente?')) return;
+    if (!await confirm({ title: 'Remover este documento do expediente?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Remover', variant: 'danger' })) return;
     
     try {
       await expedientesAPI.removeDocumento(selectedExpediente.id, documentoId);

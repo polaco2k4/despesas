@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usuariosAPI, departamentosAPI, usuariosDepartamentosAPI } from '../lib/backendApi';
 import type { Usuario, UserRole } from '../types/database';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { 
   Plus, 
   Edit, 
@@ -27,6 +28,7 @@ const initialFormData: FormData = {
 };
 
 const Usuarios: React.FC = () => {
+  const { toast, confirm } = useFeedback();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [departamentos, setDepartamentos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,31 +82,31 @@ const Usuarios: React.FC = () => {
 
   const validateForm = (): boolean => {
     if (!formData.nome || !formData.email || !formData.role) {
-      alert('Preencha todos os campos obrigatórios');
+      toast.warning('Preencha todos os campos obrigatórios.');
       return false;
     }
 
     // For adm_area users, require at least one department
     if (formData.role === 'adm_area') {
       if (!formData.departamento_ids || formData.departamento_ids.length === 0) {
-        alert('ADM Área deve ter pelo menos um departamento atribuído');
+        toast.warning('ADM Área deve ter pelo menos um departamento atribuído.');
         return false;
       }
     } else {
       // For other roles, require single department
       if (!formData.departamento_id) {
-        alert('Selecione um departamento');
+        toast.warning('Selecione um departamento.');
         return false;
       }
     }
 
     if (!editingUsuario && (!formData.password || formData.password.length < 6)) {
-      alert('A senha deve ter pelo menos 6 caracteres');
+      toast.warning('A senha deve ter pelo menos 6 caracteres.');
       return false;
     }
 
     if (!editingUsuario && formData.password !== formData.confirmPassword) {
-      alert('As senhas não coincidem');
+      toast.warning('As senhas não coincidem.');
       return false;
     }
 
@@ -144,19 +146,26 @@ const Usuarios: React.FC = () => {
         }
       }
       
+      toast.success(editingUsuario ? 'Utilizador actualizado com sucesso.' : 'Utilizador criado com sucesso.');
       handleCloseModal();
       await fetchData();
     } catch (error) {
       console.error('Error saving usuario:', error);
-      alert('Erro ao salvar usuário');
+      toast.error('Não foi possível guardar o utilizador. Tente novamente.');
     }
   };
 
   const handleDeleteUsuario = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este usuário?')) {
+    const confirmado = await confirm({
+      title: 'Excluir utilizador?',
+      message: 'Esta acção não pode ser desfeita.',
+      confirmText: 'Excluir',
+      variant: 'danger'
+    });
+    if (confirmado) {
       try {
         await usuariosAPI.delete(id);
-        alert('Usuário excluído com sucesso!');
+        toast.success('Utilizador excluído com sucesso.');
         await fetchData();
       } catch (error: any) {
         console.error('Error deleting usuario:', error);
@@ -176,10 +185,10 @@ const Usuarios: React.FC = () => {
             }
           }
           
-          alert(message);
+          toast.error(message, 'Não é possível excluir');
         } else {
           // Fallback to simple error message
-          alert(error.message || 'Erro ao excluir usuário');
+          toast.error(error.message || 'Erro ao excluir utilizador.');
         }
       }
     }

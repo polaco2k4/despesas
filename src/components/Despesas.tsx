@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
-import { despesasAPI, rubricasAPI, orcamentosAPI, aprovacoesAPI, fornecedoresAPI } from '../lib/backendApi';
+import { despesasAPI, rubricasAPI, orcamentosAPI, aprovacoesAPI, fornecedoresAPI, SERVER_BASE_URL } from '../lib/backendApi';
 import type { Despesa, Rubrica, Orcamento } from '../types/database';
 import { 
   Plus, 
@@ -23,6 +24,7 @@ import {
 import { AlertDialog } from './ui/AlertDialog';
 
 const Despesas: React.FC = () => {
+  const { confirm } = useFeedback();
   const { userProfile } = useAuth();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [rubricas, setRubricas] = useState<Array<Rubrica & { orcamento?: { valor_total: number; departamento?: { nome: string } } }>>([]);
@@ -374,7 +376,7 @@ const Despesas: React.FC = () => {
       return;
     }
 
-    if (confirm('Tem certeza que deseja apagar esta despesa?')) {
+    if (await confirm({ title: 'Apagar esta despesa?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Apagar', variant: 'danger' })) {
       try {
         await despesasAPI.delete(id);
         await fetchData();
@@ -1183,7 +1185,7 @@ const Despesas: React.FC = () => {
                           {despesaAnexos.map((anexo, index) => (
                             <div key={anexo.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                               <a 
-                                href={`http://localhost:3001${anexo.anexo_url}`}
+                                href={`${SERVER_BASE_URL}${anexo.anexo_url}`}
                                 target="_blank" 
                                 rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-2"
@@ -1348,7 +1350,7 @@ const Despesas: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Comprovante</label>
                     <a
-                      href={`http://localhost:3001${selectedDespesa.comprovante_pagamento_url}`}
+                      href={`${SERVER_BASE_URL}${selectedDespesa.comprovante_pagamento_url}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
@@ -1369,7 +1371,7 @@ const Despesas: React.FC = () => {
                         despesaAnexos.map((anexo, index) => (
                           <a 
                             key={anexo.id}
-                            href={`http://localhost:3001${anexo.anexo_url}`}
+                            href={`${SERVER_BASE_URL}${anexo.anexo_url}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
@@ -1380,7 +1382,7 @@ const Despesas: React.FC = () => {
                         ))
                       ) : selectedDespesa.anexo_url ? (
                         <a 
-                          href={`http://localhost:3001${selectedDespesa.anexo_url}`}
+                          href={`${SERVER_BASE_URL}${selectedDespesa.anexo_url}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"

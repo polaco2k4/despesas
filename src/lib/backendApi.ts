@@ -10,6 +10,9 @@ const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
+// Base do servidor sem "/api", para links de ficheiros (anexos, comprovativos)
+export const SERVER_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
+
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {};
   

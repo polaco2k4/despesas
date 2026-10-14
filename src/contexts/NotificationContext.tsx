@@ -25,6 +25,8 @@ interface NotificationContextType {
   addNotification: (notification: Omit<Notification, 'id' | 'lida' | 'data_criacao'>) => void;
 }
 
+const POLL_INTERVAL_MS = 30000;
+
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const useNotifications = () => {
@@ -45,10 +47,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (silencioso = false) => {
     if (!userProfile?.id) return;
-    
-    setLoading(true);
+
+    if (!silencioso) setLoading(true);
     try {
       const [notificationsData, unreadData] = await Promise.all([
         notificacoesAPI.getByUsuario(userProfile.id),
@@ -123,9 +125,19 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   };
 
   useEffect(() => {
-    if (userProfile?.id) {
-      fetchNotifications();
-    }
+    if (!userProfile?.id) return;
+    fetchNotifications();
+
+    // Verificar novas notificações periodicamente e ao voltar ao separador
+    const interval = setInterval(() => fetchNotifications(true), POLL_INTERVAL_MS);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') fetchNotifications(true);
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [userProfile?.id]);
 
   return (

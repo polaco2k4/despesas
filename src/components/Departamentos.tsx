@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { departamentosAPI } from '../lib/backendApi';
 import type { Departamento } from '../types/database';
 import { 
@@ -11,6 +12,7 @@ import {
 } from 'lucide-react';
 
 const Departamentos: React.FC = () => {
+  const { confirm } = useFeedback();
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,7 +66,7 @@ const Departamentos: React.FC = () => {
   };
 
   const handleDeleteDepartamento = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este departamento?')) {
+    if (await confirm({ title: 'Excluir este departamento?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Excluir', variant: 'danger' })) {
       try {
         await departamentosAPI.delete(id);
         await fetchDepartamentos();

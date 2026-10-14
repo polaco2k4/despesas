@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
 import { fornecedoresAPI, categoriasFornecedoresAPI } from '../lib/backendApi';
 import type { Fornecedor } from '../data/mockData';
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 
 const Fornecedores: React.FC = () => {
+  const { toast, confirm } = useFeedback();
   const { userProfile } = useAuth();
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,7 @@ const Fornecedores: React.FC = () => {
     } catch (error: any) {
       console.error('Error creating/updating fornecedor:', error);
       const errorMessage = error?.message || 'Erro ao criar/atualizar fornecedor';
-      alert(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -121,7 +123,7 @@ const Fornecedores: React.FC = () => {
   };
 
   const handleDeleteFornecedor = async (id: string) => {
-    if (confirm('Tem certeza que deseja apagar este fornecedor?')) {
+    if (await confirm({ title: 'Apagar este fornecedor?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Apagar', variant: 'danger' })) {
       try {
         await fornecedoresAPI.delete(id);
         await fetchData();
@@ -129,9 +131,9 @@ const Fornecedores: React.FC = () => {
         console.error('Error deleting fornecedor:', error);
         const errorMessage = error?.message || 'Erro ao deletar fornecedor';
         if (error?.message.includes('foreign key constraint')) {
-          alert('Não é possível deletar este fornecedor pois ele está relacionado a outros registros.');
+          toast.error('Não é possível deletar este fornecedor pois ele está relacionado a outros registros.');
         } else {
-          alert(errorMessage);
+          toast.error(errorMessage);
         }
       }
     }
@@ -157,19 +159,19 @@ const Fornecedores: React.FC = () => {
     } catch (error: any) {
       console.error('Error creating/updating categoria:', error);
       const errorMessage = error?.message || 'Erro ao criar/atualizar categoria';
-      alert(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
   const handleDeleteCategoria = async (id: string) => {
-    if (confirm('Tem certeza que deseja apagar esta categoria?')) {
+    if (await confirm({ title: 'Apagar esta categoria?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Apagar', variant: 'danger' })) {
       try {
         await categoriasFornecedoresAPI.delete(id);
         await fetchCategorias();
       } catch (error: any) {
         console.error('Error deleting categoria:', error);
         const errorMessage = error?.message || 'Erro ao deletar categoria';
-        alert(errorMessage);
+        toast.error(errorMessage);
       }
     }
   };
@@ -200,7 +202,7 @@ const Fornecedores: React.FC = () => {
       await fetchData();
     } catch (error) {
       console.error('Erro ao fazer upload do documento:', error);
-      alert('Erro ao fazer upload do documento');
+      toast.error('Erro ao fazer upload do documento');
     } finally {
       setTimeout(() => {
         setUploadingFile(null);
@@ -210,14 +212,14 @@ const Fornecedores: React.FC = () => {
   };
   
   const handleDeleteDocumento = async (fornecedorId: string, documentoId: string) => {
-    if (!confirm('Tem certeza que deseja remover este documento?')) return;
+    if (!await confirm({ title: 'Remover este documento?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Remover', variant: 'danger' })) return;
     
     try {
       await fornecedoresAPI.removeDocumento(fornecedorId, documentoId);
       await fetchData();
     } catch (error) {
       console.error('Erro ao remover documento:', error);
-      alert('Erro ao remover documento');
+      toast.error('Erro ao remover documento');
     }
   };
   

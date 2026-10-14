@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { ManutencaoModal, AbastecimentoModal } from './Frotas_Modals';
 import { API_BASE_URL } from '../lib/backendApi';
+import { useFeedback } from '../contexts/FeedbackContext';
 import jsPDF from 'jspdf';
 
 interface Veiculo {
@@ -129,6 +130,7 @@ const classeCartaoAlerta = (nivel?: AlertaManutencao['nivel']) =>
 
 const Frotas: React.FC = () => {
   const { userProfile } = useAuth();
+  const { toast, confirm } = useFeedback();
   const isColaborador = userProfile?.role === 'colaborador';
   const [activeTab, setActiveTab] = useState<'veiculos' | 'manutencoes' | 'abastecimentos' | 'atribuicoes' | 'solicitacoes' | 'relatorios'>(isColaborador ? 'solicitacoes' : 'veiculos');
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
@@ -362,6 +364,11 @@ const Frotas: React.FC = () => {
     }
   };
 
+  const lerErro = async (response: Response, fallback: string) => {
+    const data = await response.json().catch(() => ({}));
+    return data.error || fallback;
+  };
+
   const handleCreateVeiculo = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -378,10 +385,14 @@ const Frotas: React.FC = () => {
         setShowCreateModal(false);
         setEditingVeiculo({});
         setIsEditing(false);
+        toast.success(isEditing ? 'Veículo actualizado com sucesso.' : 'Veículo registado com sucesso.');
         await fetchData();
+      } else {
+        toast.error(await lerErro(response, 'Não foi possível guardar. Verifique os dados e tente novamente.'));
       }
     } catch (error) {
       console.error('Error saving veiculo:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -427,13 +438,25 @@ const Frotas: React.FC = () => {
   };
 
   const handleDeleteVeiculo = async (id: string) => {
-    if (!confirm('Tem certeza que deseja apagar este veículo?')) return;
+    const confirmado = await confirm({
+      title: 'Apagar veículo?',
+      message: 'Também serão apagadas as manutenções, abastecimentos e atribuições deste veículo.',
+      confirmText: 'Apagar',
+      variant: 'danger'
+    });
+    if (!confirmado) return;
     
     try {
-      await fetch(`${API_URL}/frotas/veiculos/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/frotas/veiculos/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        toast.error(await lerErro(response, 'Não foi possível apagar. Tente novamente.'));
+        return;
+      }
+      toast.success('Veículo apagado com sucesso.');
       await fetchData();
     } catch (error) {
       console.error('Error deleting veiculo:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -444,13 +467,25 @@ const Frotas: React.FC = () => {
   };
 
   const handleDeleteManutencao = async (id: string) => {
-    if (!confirm('Tem certeza que deseja apagar esta manutenção?')) return;
+    const confirmado = await confirm({
+      title: 'Apagar manutenção?',
+      message: 'Esta acção não pode ser desfeita.',
+      confirmText: 'Apagar',
+      variant: 'danger'
+    });
+    if (!confirmado) return;
     
     try {
-      await fetch(`${API_URL}/frotas/manutencoes/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/frotas/manutencoes/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        toast.error(await lerErro(response, 'Não foi possível apagar. Tente novamente.'));
+        return;
+      }
+      toast.success('Manutenção apagada com sucesso.');
       await fetchData();
     } catch (error) {
       console.error('Error deleting manutencao:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -461,13 +496,25 @@ const Frotas: React.FC = () => {
   };
 
   const handleDeleteAbastecimento = async (id: string) => {
-    if (!confirm('Tem certeza que deseja apagar este abastecimento?')) return;
+    const confirmado = await confirm({
+      title: 'Apagar abastecimento?',
+      message: 'Esta acção não pode ser desfeita.',
+      confirmText: 'Apagar',
+      variant: 'danger'
+    });
+    if (!confirmado) return;
     
     try {
-      await fetch(`${API_URL}/frotas/abastecimentos/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/frotas/abastecimentos/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        toast.error(await lerErro(response, 'Não foi possível apagar. Tente novamente.'));
+        return;
+      }
+      toast.success('Abastecimento apagado com sucesso.');
       await fetchData();
     } catch (error) {
       console.error('Error deleting abastecimento:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -487,10 +534,14 @@ const Frotas: React.FC = () => {
         setShowManutencaoModal(false);
         setEditingManutencao({});
         setIsEditingManutencao(false);
+        toast.success(isEditingManutencao ? 'Manutenção actualizada com sucesso.' : 'Manutenção registada com sucesso.');
         await fetchData();
+      } else {
+        toast.error(await lerErro(response, 'Não foi possível guardar. Verifique os dados e tente novamente.'));
       }
     } catch (error) {
       console.error('Error saving manutencao:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -510,14 +561,19 @@ const Frotas: React.FC = () => {
         setShowAbastecimentoModal(false);
         setEditingAbastecimento({});
         setIsEditingAbastecimento(false);
+        const km = Number(editingAbastecimento.quilometragem);
+        toast.success(
+          isEditingAbastecimento
+            ? 'Abastecimento actualizado com sucesso.'
+            : `Abastecimento registado. Quilometragem do veículo: ${km.toLocaleString('pt-PT')} km.`
+        );
         await fetchData();
       } else {
-        const data = await response.json().catch(() => ({}));
-        alert(data.error || 'Erro ao guardar abastecimento');
+        toast.error(await lerErro(response, 'Não foi possível guardar o abastecimento.'), 'Abastecimento não registado');
       }
     } catch (error) {
       console.error('Error saving abastecimento:', error);
-      alert('Erro ao guardar abastecimento');
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -557,10 +613,14 @@ const Frotas: React.FC = () => {
         setShowSolicitacaoModal(false);
         setEditingSolicitacao({});
         setIsEditingSolicitacao(false);
+        toast.success(isEditingSolicitacao ? 'Solicitação actualizada com sucesso.' : 'Solicitação enviada com sucesso.');
         await fetchData();
+      } else {
+        toast.error(await lerErro(response, 'Não foi possível guardar. Verifique os dados e tente novamente.'));
       }
     } catch (error) {
       console.error('Error saving solicitacao:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -588,13 +648,25 @@ const Frotas: React.FC = () => {
   };
 
   const handleDeleteSolicitacao = async (id: string) => {
-    if (!confirm('Tem certeza que deseja apagar esta solicitação?')) return;
+    const confirmado = await confirm({
+      title: 'Apagar solicitação?',
+      message: 'Esta acção não pode ser desfeita.',
+      confirmText: 'Apagar',
+      variant: 'danger'
+    });
+    if (!confirmado) return;
     
     try {
-      await fetch(`${API_URL}/frotas/solicitacoes/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/frotas/solicitacoes/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        toast.error(await lerErro(response, 'Não foi possível apagar. Tente novamente.'));
+        return;
+      }
+      toast.success('Solicitação apagada com sucesso.');
       await fetchData();
     } catch (error) {
       console.error('Error deleting solicitacao:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -614,10 +686,14 @@ const Frotas: React.FC = () => {
         setShowAtribuicaoModal(false);
         setEditingAtribuicao({});
         setIsEditingAtribuicao(false);
+        toast.success(isEditingAtribuicao ? 'Atribuição actualizada com sucesso.' : 'Atribuição registada com sucesso.');
         await fetchData();
+      } else {
+        toast.error(await lerErro(response, 'Não foi possível guardar. Verifique os dados e tente novamente.'));
       }
     } catch (error) {
       console.error('Error saving atribuicao:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 
@@ -630,13 +706,25 @@ const Frotas: React.FC = () => {
   };
 
   const handleDeleteAtribuicao = async (id: string) => {
-    if (!confirm('Tem certeza que deseja apagar esta atribuição?')) return;
+    const confirmado = await confirm({
+      title: 'Apagar atribuição?',
+      message: 'Esta acção não pode ser desfeita.',
+      confirmText: 'Apagar',
+      variant: 'danger'
+    });
+    if (!confirmado) return;
     
     try {
-      await fetch(`${API_URL}/frotas/atribuicoes/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/frotas/atribuicoes/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        toast.error(await lerErro(response, 'Não foi possível apagar. Tente novamente.'));
+        return;
+      }
+      toast.success('Atribuição apagada com sucesso.');
       await fetchData();
     } catch (error) {
       console.error('Error deleting atribuicao:', error);
+      toast.error('Sem ligação ao servidor. Verifique a rede e tente novamente.');
     }
   };
 

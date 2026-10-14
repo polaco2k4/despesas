@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
+import { API_BASE_URL } from '../lib/backendApi';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Calendar, 
@@ -96,9 +98,10 @@ interface Acao {
   observacoes?: string;
 }
 
-const API_URL = 'http://localhost:3001/api';
+const API_URL = API_BASE_URL;
 
 const Actas: React.FC = () => {
+  const { confirm } = useFeedback();
   const { userProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<'reunioes' | 'actas' | 'acoes'>('reunioes');
   const [reunioes, setReunioes] = useState<Reuniao[]>([]);
@@ -381,7 +384,7 @@ const Actas: React.FC = () => {
   };
 
   const handleDeleteReuniao = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta reunião?')) return;
+    if (!await confirm({ title: 'Excluir esta reunião?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Excluir', variant: 'danger' })) return;
     
     try {
       const response = await fetch(`${API_URL}/actas/reunioes/${id}`, {
@@ -454,7 +457,7 @@ const Actas: React.FC = () => {
   };
 
   const handleDeleteActa = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta acta?')) return;
+    if (!await confirm({ title: 'Excluir esta acta?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Excluir', variant: 'danger' })) return;
     
     try {
       const response = await fetch(`${API_URL}/actas/actas/${id}`, {
@@ -522,7 +525,7 @@ const Actas: React.FC = () => {
   };
 
   const handleDeleteAcao = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta ação?')) return;
+    if (!await confirm({ title: 'Excluir esta ação?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Excluir', variant: 'danger' })) return;
     
     try {
       const response = await fetch(`${API_URL}/actas/acoes/${id}`, {

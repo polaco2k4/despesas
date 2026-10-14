@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { 
   User, 
   Lock, 
@@ -14,6 +15,7 @@ import {
 
 const Configuracoes: React.FC = () => {
   const { userProfile } = useAuth();
+  const { toast } = useFeedback();
   const [activeTab, setActiveTab] = useState('perfil');
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -40,18 +42,18 @@ const Configuracoes: React.FC = () => {
     e.preventDefault();
     // Simulate API call
     console.log('Saving profile:', formData);
-    alert('Perfil atualizado com sucesso!');
+    toast.success('Perfil actualizado com sucesso.');
   };
 
   const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.newPassword !== formData.confirmPassword) {
-      alert('As senhas não coincidem!');
+      toast.warning('As senhas não coincidem.');
       return;
     }
     // Simulate API call
     console.log('Changing password');
-    alert('Senha alterada com sucesso!');
+    toast.success('Senha alterada com sucesso.');
     setFormData({
       ...formData,
       currentPassword: '',
@@ -63,13 +65,13 @@ const Configuracoes: React.FC = () => {
   const handleSaveNotifications = () => {
     // Simulate API call
     console.log('Saving notifications:', notifications);
-    alert('Configurações de notificação salvas!');
+    toast.success('Configurações de notificação guardadas.');
   };
 
   const handleSaveSystemSettings = () => {
     // Simulate API call
     console.log('Saving system settings:', systemSettings);
-    alert('Configurações do sistema salvas!');
+    toast.success('Configurações do sistema guardadas.');
   };
 
   const tabs = [

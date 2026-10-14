@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
 import { contratosAPI, fornecedoresAPI, departamentosAPI, usuariosAPI } from '../lib/backendApi';
 import { 
@@ -65,6 +66,7 @@ interface Stats {
 }
 
 const Contratos: React.FC = () => {
+  const { confirm } = useFeedback();
   const { userProfile } = useAuth();
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -221,7 +223,7 @@ const Contratos: React.FC = () => {
   };
 
   const handleDeleteContrato = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este contrato?')) return;
+    if (!await confirm({ title: 'Excluir este contrato?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Excluir', variant: 'danger' })) return;
     
     try {
       await contratosAPI.delete(id);
@@ -326,7 +328,7 @@ const Contratos: React.FC = () => {
   };
 
   const handleDeleteFile = async (contratoId: string) => {
-    if (!confirm('Tem certeza que deseja remover o ficheiro anexado?')) return;
+    if (!await confirm({ title: 'Remover o ficheiro anexado?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Remover', variant: 'danger' })) return;
 
     try {
       const API_URL = window.location.hostname === 'localhost' 
@@ -1196,7 +1198,7 @@ const Contratos: React.FC = () => {
                       <div className="mt-4 pt-4 border-t border-blue-300">
                         <button
                           onClick={async () => {
-                            if (confirm('Deseja renovar este contrato manualmente?')) {
+                            if (await confirm({ title: 'Renovar contrato?', message: 'Será criado um novo contrato a partir deste.', confirmText: 'Renovar', variant: 'info' })) {
                               try {
                                 const API_URL = window.location.hostname === 'localhost' 
                                   ? 'http://localhost:3001/api' 

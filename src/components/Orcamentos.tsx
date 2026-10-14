@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
 import { orcamentosAPI, rubricasAPI, departamentosAPI } from '../lib/backendApi';
 import type { Orcamento, Rubrica, Departamento } from '../types/database';
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 
 const Orcamentos: React.FC = () => {
+  const { toast, confirm } = useFeedback();
   const { userProfile } = useAuth();
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -156,7 +158,7 @@ const Orcamentos: React.FC = () => {
   const handleDeleteOrcamento = async (id: string) => {
     if (!isAdmin) return;
     
-    if (confirm('Tem certeza que deseja apagar este orçamento?')) {
+    if (await confirm({ title: 'Apagar este orçamento?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Apagar', variant: 'danger' })) {
       try {
         await orcamentosAPI.delete(id);
         setEditingOrcamento(null);
@@ -182,7 +184,7 @@ const Orcamentos: React.FC = () => {
   const handleDeleteRubrica = async (rubricaId: string) => {
     if (!isAdmin) return;
     
-    if (confirm('Tem certeza que deseja apagar esta rubrica? Esta ação não pode ser desfeita.')) {
+    if (await confirm({ title: 'Apagar esta rubrica?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Apagar', variant: 'danger' })) {
       try {
         await rubricasAPI.delete(rubricaId);
         if (selectedOrcamento) {
@@ -192,7 +194,7 @@ const Orcamentos: React.FC = () => {
         }
       } catch (error) {
         console.error('Error deleting rubrica:', error);
-        alert('Ocorreu um erro ao apagar a rubrica. Por favor, tente novamente.');
+        toast.error('Ocorreu um erro ao apagar a rubrica. Por favor, tente novamente.');
       }
     }
   };
