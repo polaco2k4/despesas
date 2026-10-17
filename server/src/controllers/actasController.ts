@@ -1203,8 +1203,9 @@ export const updateActa = async (req: Request, res: Response) => {
       }
     }
     if (aprovador_id !== undefined) {
+      // O aprovador é sempre o utilizador autenticado
       fields.push('aprovador_id = @aprovador_id');
-      params.aprovador_id = aprovador_id;
+      params.aprovador_id = aprovador_id ? req.headers['x-user-id'] : null;
     }
     
     if (fields.length === 0) {

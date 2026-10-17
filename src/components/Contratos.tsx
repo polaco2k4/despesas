@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL, contratosAPI, fornecedoresAPI, departamentosAPI, usuariosAPI } from '../lib/backendApi';
+import { withAuthToken } from '../lib/authFetch';
 import { 
   Plus, 
   Search, 
@@ -310,7 +311,7 @@ const Contratos: React.FC = () => {
   const handleDownloadFile = async (contratoId: string) => {
     try {
 
-      window.open(`${API_BASE_URL}/contratos/${contratoId}/download-anexo`, '_blank');
+      window.open(withAuthToken(`${API_BASE_URL}/contratos/${contratoId}/download-anexo`), '_blank');
     } catch (error) {
       setAlertDialog({
         isOpen: true,

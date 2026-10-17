@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import { createHistorico } from './historicoDocumentosController.js';
+import { getAuthUser } from '../middleware/requireAuth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -310,9 +311,10 @@ export const createDocumento = async (req: Request, res: Response) => {
       tags,
       publico = false,
       departamento_id,
-      criado_por,
       documento_pai_id
     } = req.body;
+    // O criador é sempre o utilizador autenticado
+    const criado_por = getAuthUser(req).id;
 
     if (!criado_por) {
       return res.status(400).json({ error: 'Usuário criador é obrigatório' });

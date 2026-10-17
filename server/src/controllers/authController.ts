@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import { createADAuthService } from '../services/adAuthService.js';
+import { createToken } from '../utils/authToken.js';
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -31,7 +32,7 @@ export const login = async (req: Request, res: Response) => {
 
       if (localUser) {
         console.log('✅ User found in local database:', email);
-        return res.json({ user: localUser });
+        return res.json({ user: localUser, token: createToken(localUser) });
       } else {
         console.log('❌ AD user not authorized - not found in local database:', email);
         return res.status(401).json({ error: 'Usuário não autorizado no sistema' });
@@ -90,7 +91,10 @@ export const login = async (req: Request, res: Response) => {
     const userWithDepartments = await buildUserWithDepartments(row);
     
     console.log('Local authentication successful for:', email);
-    return res.json({ user: userWithDepartments });
+    if (!userWithDepartments) {
+      return res.status(500).json({ error: 'Erro ao fazer login' });
+    }
+    return res.json({ user: userWithDepartments, token: createToken(userWithDepartments) });
     
   } catch (error) {
     console.error('Error during login:', error);

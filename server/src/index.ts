@@ -23,6 +23,8 @@ import frotasRoutes from './routes/frotas.js';
 import actasRoutes from './routes/actas.js';
 import contratosRoutes from './routes/contratos.js';
 import configuracoesRoutes from './routes/configuracoes.js';
+import { apiBrowserAuth } from './middleware/apiBrowserAuth.js';
+import { requireAuth } from './middleware/requireAuth.js';
 
 dotenv.config();
 
@@ -37,10 +39,19 @@ app.use(cors({
 }));
 
 app.use(helmet());
+// Não registar o token de sessão dos links de download nos logs
+morgan.token('url', (req: any) => req.originalUrl.replace(/([?&]token=)[^&]+/, '$1***'));
 app.use(morgan('dev'));
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static('uploads'));
+// Pedir utilizador e senha para visualizar a API no browser
+app.use('/api', apiBrowserAuth);
+app.get('/', apiBrowserAuth);
+
+// Exigir token de sessão em todas as rotas da API
+app.use('/api', requireAuth);
+
+// Serve static files from uploads directory (exige sessão: token no cabeçalho ou em ?token=)
+app.use('/uploads', requireAuth, express.static('uploads'));
 
 // Apply JSON parsing to all routes except multipart uploads
 app.use((req, res, next) => {

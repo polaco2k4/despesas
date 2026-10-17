@@ -79,11 +79,11 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 export const authAPI = {
   signIn: async (email: string, password: string) => {
     try {
-      const result = await fetchAPI<{ user: any }>('/auth/login', {
+      const result = await fetchAPI<{ user: any; token: string }>('/auth/login', {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      return { user: result.user, error: null };
+      return { user: result.user, token: result.token, error: null };
     } catch (error: any) {
       console.error('Login error:', error);
       if (error instanceof TypeError) {

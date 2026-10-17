@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../lib/backendApi';
+import { TOKEN_STORAGE_KEY } from '../lib/authFetch';
 import type { Usuario } from '../types/database';
 
 const USER_STORAGE_KEY = 'sgbd_user';
@@ -30,7 +31,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const loadUser = () => {
       try {
         const userJson = localStorage.getItem(USER_STORAGE_KEY);
-        if (userJson) {
+        // Sessões antigas sem token têm de voltar a fazer login
+        if (userJson && localStorage.getItem(TOKEN_STORAGE_KEY)) {
           const user = JSON.parse(userJson);
           setUserProfile(user);
         }
@@ -48,7 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signIn = async (email: string, password: string) => {
     try {
       const result = await authAPI.signIn(email, password);
-      if (result?.user) {
+      if (result?.user && result.token) {
+        localStorage.setItem(TOKEN_STORAGE_KEY, result.token);
         setUserProfile(result.user);
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.user));
         return { error: null };
@@ -66,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await authAPI.signOut();
       setUserProfile(null);
       localStorage.removeItem(USER_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
       return { error: null };
     } catch (error) {
       console.error('Logout error:', error);

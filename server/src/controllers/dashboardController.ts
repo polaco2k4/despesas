@@ -1,10 +1,21 @@
 import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import type { DashboardStats } from '../types/database.js';
+import { getAuthUser } from '../middleware/requireAuth.js';
+
+// Perfil e departamento vêm do token; gestores e colaboradores só veem o próprio departamento
+const getDashboardScope = (req: Request) => {
+  const { role, departamento_id } = getAuthUser(req);
+  const restrito = role === 'gestor' || role === 'colaborador';
+  return {
+    userRole: role,
+    departamentoId: restrito || req.query.departamentoId ? departamento_id : undefined
+  };
+};
 
 export const getDashboardStats = async (req: Request, res: Response) => {
   try {
-    const { userRole, departamentoId } = req.query;
+    const { userRole, departamentoId } = getDashboardScope(req);
     
     let whereClause = '';
     const params: Record<string, any> = {};
@@ -60,7 +71,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
 export const getDailyExpenses = async (req: Request, res: Response) => {
   try {
-    const { userRole, departamentoId } = req.query;
+    const { userRole, departamentoId } = getDashboardScope(req);
     
     let whereClause = 'WHERE d.created_at >= DATEADD(day, -7, GETDATE())'; // Always get last 7 days for graph
     const params: Record<string, any> = {};

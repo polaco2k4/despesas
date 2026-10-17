@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { executeQuery } from '../config/database.js';
 import type { Aprovacao, AprovacaoStatus, NivelAprovacao, DespesaStatus } from '../types/database.js';
 import { criarNotificacao } from './notificacoesController.js';
+import { getAuthUser } from '../middleware/requireAuth.js';
 
 const WEBHOOK_URL_DESPESAS = 'https://hook.eu2.make.com/yxbxiw2993rsk2ng2sus3t8p4xs4e79u';
 
@@ -71,7 +72,9 @@ export const getAllAprovacoes = async (req: Request, res: Response) => {
 
 export const createAprovacao = async (req: Request, res: Response) => {
   try {
-    const { despesa_id, aprovado_por, status, comentario } = req.body;
+    const { despesa_id, status, comentario } = req.body;
+    // O aprovador é sempre o utilizador autenticado
+    const aprovado_por = getAuthUser(req).id;
 
     console.log('🔍 createAprovacao debug:', {
       despesa_id,

@@ -64,7 +64,7 @@ export const createNotificacao = async (req: Request, res: Response) => {
 export const marcarComoLida = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { usuarioId } = req.body;
+    const usuarioId = req.headers['x-user-id'];
     
     const query = `
       UPDATE notificacoes 
@@ -101,7 +101,7 @@ export const marcarTodasComoLidas = async (req: Request, res: Response) => {
 export const deleteNotificacao = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { usuarioId } = req.body;
+    const usuarioId = req.headers['x-user-id'];
     
     const query = `
       DELETE FROM notificacoes 

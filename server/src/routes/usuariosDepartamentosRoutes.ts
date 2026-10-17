@@ -5,6 +5,7 @@ import {
   removeUserDepartamento,
   updateUserDepartamentos
 } from '../controllers/usuariosDepartamentosController.js';
+import { requireAdmin } from '../middleware/requireAuth.js';
 
 const router = Router();
 
@@ -12,12 +13,12 @@ const router = Router();
 router.get('/usuarios/:usuario_id/departamentos', getUserDepartamentos);
 
 // Add a department to a user
-router.post('/usuarios/:usuario_id/departamentos', addUserDepartamento);
+router.post('/usuarios/:usuario_id/departamentos', requireAdmin, addUserDepartamento);
 
 // Remove a department from a user
-router.delete('/usuarios/:usuario_id/departamentos/:departamento_id', removeUserDepartamento);
+router.delete('/usuarios/:usuario_id/departamentos/:departamento_id', requireAdmin, removeUserDepartamento);
 
 // Update all departments for a user
-router.put('/usuarios/:usuario_id/departamentos', updateUserDepartamentos);
+router.put('/usuarios/:usuario_id/departamentos', requireAdmin, updateUserDepartamentos);
 
 export default router;

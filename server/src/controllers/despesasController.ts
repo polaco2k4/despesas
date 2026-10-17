@@ -3,6 +3,7 @@ import { executeQuery } from '../config/database.js';
 import type { Despesa, DespesaStatus } from '../types/database.js';
 import { criarNotificacao } from './notificacoesController.js';
 import { getPlaneamentoDeptId, sameGuid } from './aprovacoesController.js';
+import { getAuthUser } from '../middleware/requireAuth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -143,16 +144,18 @@ export const getAllDespesas = async (req: Request, res: Response) => {
       status, 
       usuario_id, 
       departamento_id, 
-      departamento_ids, 
-      user_role, 
-      user_departamento_id,
+      departamento_ids,
       data_inicio,
       data_fim,
       rubrica_id,
       valor_min,
       valor_max
     } = req.query;
-    
+    // Perfil e departamento vêm do token, não da query (a query só indica se o filtro é pedido)
+    const authUser = getAuthUser(req);
+    const user_role = authUser.role;
+    const user_departamento_id = req.query.user_departamento_id ? authUser.departamento_id : undefined;
+
     console.log('🔍 Backend Debug - Query params received:', {
       status,
       usuario_id,
@@ -427,7 +430,9 @@ export const getDespesaById = async (req: Request, res: Response) => {
 
 export const createDespesa = async (req: Request, res: Response) => {
   try {
-    const { rubrica_id, usuario_id, descricao, valor, anexo_url, fornecedor_id, anexos_urls } = req.body;
+    const { rubrica_id, descricao, valor, anexo_url, fornecedor_id, anexos_urls } = req.body;
+    // O autor da despesa é sempre o utilizador autenticado
+    const usuario_id = getAuthUser(req).id;
     
     console.log('Creating despesa with data:', { 
       rubrica_id, 

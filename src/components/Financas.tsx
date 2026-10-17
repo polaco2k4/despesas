@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { despesasAPI, rubricasAPI, departamentosAPI, dashboardAPI, SERVER_BASE_URL } from '../lib/backendApi';
+import { withAuthToken } from '../lib/authFetch';
 import type { Despesa, Rubrica, Departamento, DashboardStats, DespesaStatus } from '../types/database';
 import WithDepartmentAccess from './auth/withDepartmentAccess';
 import { useAuth } from '../contexts/AuthContext';
@@ -1251,7 +1252,7 @@ const FinancasContent: React.FC = () => {
                   <div className="md:col-span-2">
                     <h4 className="text-sm font-medium text-gray-500 mb-1">Comprovante</h4>
                     <a
-                      href={`${SERVER_BASE_URL}${selectedDespesa.comprovante_pagamento_url}`}
+                      href={withAuthToken(`${SERVER_BASE_URL}${selectedDespesa.comprovante_pagamento_url}`)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
@@ -1271,7 +1272,7 @@ const FinancasContent: React.FC = () => {
                         despesaAnexos.map((anexo, index) => (
                           <a
                             key={anexo.id}
-                            href={`${SERVER_BASE_URL}${anexo.anexo_url}`}
+                            href={withAuthToken(`${SERVER_BASE_URL}${anexo.anexo_url}`)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
@@ -1282,7 +1283,7 @@ const FinancasContent: React.FC = () => {
                         ))
                       ) : selectedDespesa.anexo_url ? (
                         <a
-                          href={`${SERVER_BASE_URL}${selectedDespesa.anexo_url}`}
+                          href={withAuthToken(`${SERVER_BASE_URL}${selectedDespesa.anexo_url}`)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-700 flex items-center space-x-2 p-2 bg-blue-50 rounded hover:bg-blue-100 transition-colors"

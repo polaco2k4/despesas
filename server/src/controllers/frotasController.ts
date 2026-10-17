@@ -776,7 +776,7 @@ export const createSolicitacao = async (req: Request, res: Response) => {
     `;
     
     const result = await executeQuery(query, {
-      solicitante_id: req.body.solicitante_id || null,
+      solicitante_id: req.headers['x-user-id'] || null,
       destino,
       data_inicio: new Date(data_inicio),
       data_fim: new Date(data_fim),

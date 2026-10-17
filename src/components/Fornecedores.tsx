@@ -1,7 +1,8 @@
 ﻿import React, { useEffect, useState } from 'react';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
-import { fornecedoresAPI, categoriasFornecedoresAPI } from '../lib/backendApi';
+import { fornecedoresAPI, categoriasFornecedoresAPI, SERVER_BASE_URL } from '../lib/backendApi';
+import { withAuthToken } from '../lib/authFetch';
 import type { Fornecedor } from '../data/mockData';
 import { 
   Plus, 
@@ -871,7 +872,7 @@ const Fornecedores: React.FC = () => {
                         </div>
                         <div className="flex items-center space-x-2">
                           <a
-                            href={doc.url}
+                            href={withAuthToken(`${SERVER_BASE_URL}${doc.url}`)}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:text-blue-800 p-1 rounded-full hover:bg-blue-50"
@@ -880,7 +881,7 @@ const Fornecedores: React.FC = () => {
                             <Eye className="h-4 w-4" />
                           </a>
                           <a
-                            href={doc.url}
+                            href={withAuthToken(`${SERVER_BASE_URL}${doc.url}`)}
                             download
                             className="text-green-600 hover:text-green-800 p-1 rounded-full hover:bg-green-50"
                             title="Transferir"
