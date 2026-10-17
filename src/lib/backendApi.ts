@@ -81,9 +81,12 @@ export const authAPI = {
         body: JSON.stringify({ email, password }),
       });
       return { user: result.user, error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
-      return { user: null, error: 'Email ou senha inválidos' };
+      if (error instanceof TypeError) {
+        return { user: null, error: 'Não foi possível contactar o servidor. Tente novamente.' };
+      }
+      return { user: null, error: (error?.status && error.message) || 'Email/utilizador ou senha inválidos' };
     }
   },
   
@@ -97,6 +100,54 @@ export const authAPI = {
       return result.user;
     } catch (error) {
       return null;
+    }
+  },
+};
+
+export type ImagemLogin = 'logo' | 'fundo';
+export interface ImagensLogin {
+  logo: string | null;
+  fundo: string | null;
+}
+
+const IMAGEM_CACHE_KEYS: Record<ImagemLogin, string> = {
+  logo: 'sgbd_logo',
+  fundo: 'sgbd_fundo_login',
+};
+
+export const configuracoesAPI = {
+  getPublicas: async () => {
+    return fetchAPI<ImagensLogin>('/configuracoes/publicas');
+  },
+
+  uploadImagem: async (tipo: ImagemLogin, file: File) => {
+    const formData = new FormData();
+    formData.append('imagem', file);
+    return fetchAPI<{ imagem: string }>(`/configuracoes/imagens/${tipo}`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+
+  removeImagem: async (tipo: ImagemLogin) => {
+    return fetchAPI<{ imagem: null }>(`/configuracoes/imagens/${tipo}`, { method: 'DELETE' });
+  },
+
+  // Cache local das imagens para as mostrar logo ao abrir a página de login
+  getCachedImagem: (tipo: ImagemLogin): string | null => {
+    try {
+      return localStorage.getItem(IMAGEM_CACHE_KEYS[tipo]);
+    } catch {
+      return null;
+    }
+  },
+
+  setCachedImagem: (tipo: ImagemLogin, imagem: string | null) => {
+    try {
+      if (imagem) localStorage.setItem(IMAGEM_CACHE_KEYS[tipo], imagem);
+      else localStorage.removeItem(IMAGEM_CACHE_KEYS[tipo]);
+    } catch {
+      // ignore storage errors (quota, private mode)
     }
   },
 };

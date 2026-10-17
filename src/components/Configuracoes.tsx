@@ -1,17 +1,187 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFeedback } from '../contexts/FeedbackContext';
-import { 
-  User, 
-  Lock, 
-  Bell, 
-  Shield, 
+import { configuracoesAPI, type ImagemLogin, type ImagensLogin } from '../lib/backendApi';
+import {
+  User,
+  Lock,
+  Bell,
+  Shield,
   Database,
   Settings,
   Save,
   Eye,
-  EyeOff
+  EyeOff,
+  Building2,
+  Upload,
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
+
+const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+
+const IMAGENS_LOGIN: Record<ImagemLogin, { titulo: string; descricao: string; maxSize: number; maxLabel: string }> = {
+  logo: {
+    titulo: 'Logotipo da página de login',
+    descricao: 'Aparece no painel azul da página de entrada. PNG, JPG, WEBP ou SVG até 1 MB.',
+    maxSize: 1 * 1024 * 1024,
+    maxLabel: '1 MB',
+  },
+  fundo: {
+    titulo: 'Imagem de fundo da página de login',
+    descricao: 'Fundo do painel do formulário (à direita). Recomendado: imagem horizontal, PNG, JPG ou WEBP até 2 MB.',
+    maxSize: 2 * 1024 * 1024,
+    maxLabel: '2 MB',
+  },
+};
+
+interface ImagemLoginConfigProps {
+  tipo: ImagemLogin;
+  atual: string | null;
+  onChange: (imagem: string | null) => void;
+}
+
+const ImagemLoginConfig: React.FC<ImagemLoginConfigProps> = ({ tipo, atual, onChange }) => {
+  const { toast } = useFeedback();
+  const config = IMAGENS_LOGIN[tipo];
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Free the object URL used for the preview
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  const resetSelection = () => {
+    setFile(null);
+    setPreview(null);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  const handleSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+    if (!IMAGE_TYPES.includes(selected.type)) {
+      toast.warning('Formato inválido. Use PNG, JPG, WEBP ou SVG.');
+      resetSelection();
+      return;
+    }
+    if (selected.size > config.maxSize) {
+      toast.warning(`A imagem não pode exceder ${config.maxLabel}.`);
+      resetSelection();
+      return;
+    }
+    setFile(selected);
+    setPreview(URL.createObjectURL(selected));
+  };
+
+  const handleSave = async () => {
+    if (!file) return;
+    setSaving(true);
+    try {
+      const { imagem } = await configuracoesAPI.uploadImagem(tipo, file);
+      onChange(imagem);
+      configuracoesAPI.setCachedImagem(tipo, imagem);
+      resetSelection();
+      toast.success('Imagem atualizada com sucesso.');
+    } catch (error: any) {
+      toast.error(error?.message || 'Erro ao guardar a imagem.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setSaving(true);
+    try {
+      await configuracoesAPI.removeImagem(tipo);
+      onChange(null);
+      configuracoesAPI.setCachedImagem(tipo, null);
+      resetSelection();
+      toast.success('Imagem reposta para o padrão.');
+    } catch (error: any) {
+      toast.error(error?.message || 'Erro ao repor a imagem.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const displayed = preview || atual;
+
+  return (
+    <div className="mb-8 pb-8 border-b border-gray-200">
+      <h3 className="text-lg font-medium text-gray-900">{config.titulo}</h3>
+      <p className="text-sm text-gray-500 mt-1 mb-4">{config.descricao}</p>
+
+      <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+        {tipo === 'logo' ? (
+          <div className="w-full sm:w-64 h-32 shrink-0 rounded-lg bg-gradient-to-br from-blue-700 to-indigo-800 flex items-center justify-center">
+            {displayed ? (
+              <div className="bg-white rounded-xl p-3 shadow-lg">
+                <img src={displayed} alt="Logotipo" className="h-16 max-w-[180px] object-contain" />
+              </div>
+            ) : (
+              <div className="h-12 w-12 bg-white/15 rounded-xl flex items-center justify-center">
+                <Building2 className="h-7 w-7 text-white" />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="relative w-full sm:w-64 h-32 shrink-0 rounded-lg bg-gray-50 border border-gray-200 flex items-center justify-center overflow-hidden">
+            {displayed && (
+              <div className="absolute inset-0">
+                <img src={displayed} alt="" className="absolute inset-0 h-full w-full object-cover scale-110 blur-lg" />
+                <img src={displayed} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                <div className="absolute inset-0 bg-gray-900/30" />
+              </div>
+            )}
+            <div className="relative w-24 h-16 bg-white/95 rounded-md shadow flex flex-col justify-center gap-1.5 px-2">
+              <div className="h-1.5 bg-gray-300 rounded" />
+              <div className="h-1.5 bg-gray-300 rounded" />
+              <div className="h-2 bg-blue-600 rounded" />
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <input
+            ref={inputRef}
+            type="file"
+            accept={IMAGE_TYPES.join(',')}
+            onChange={handleSelect}
+            disabled={saving}
+            className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {preview && (
+            <p className="text-xs text-amber-600">Pré-visualização — clique em "Guardar" para aplicar.</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleSave}
+              disabled={!file || saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+              <span>Guardar</span>
+            </button>
+            <button
+              onClick={handleRemove}
+              disabled={!atual || saving}
+              className="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RotateCcw size={18} />
+              <span>Repor padrão</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Configuracoes: React.FC = () => {
   const { userProfile } = useAuth();
@@ -37,6 +207,16 @@ const Configuracoes: React.FC = () => {
     allowSelfApproval: false,
     maxDespesaValue: 50000
   });
+
+  const [imagensLogin, setImagensLogin] = useState<ImagensLogin>({ logo: null, fundo: null });
+
+  useEffect(() => {
+    if (activeTab !== 'sistema' || userProfile?.role !== 'admin') return;
+    configuracoesAPI
+      .getPublicas()
+      .then((imagens) => setImagensLogin(imagens))
+      .catch(() => toast.error('Não foi possível carregar as imagens da página de login.'));
+  }, [activeTab, userProfile?.role, toast]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -369,7 +549,19 @@ const Configuracoes: React.FC = () => {
             {activeTab === 'sistema' && userProfile?.role === 'admin' && (
               <div className="p-6">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">Configurações do Sistema</h2>
-                
+
+                {/* Imagens da página de login */}
+                <ImagemLoginConfig
+                  tipo="logo"
+                  atual={imagensLogin.logo}
+                  onChange={(logo) => setImagensLogin((prev) => ({ ...prev, logo }))}
+                />
+                <ImagemLoginConfig
+                  tipo="fundo"
+                  atual={imagensLogin.fundo}
+                  onChange={(fundo) => setImagensLogin((prev) => ({ ...prev, fundo }))}
+                />
+
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>

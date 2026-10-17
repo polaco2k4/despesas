@@ -46,7 +46,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    setLoading(true);
     try {
       const result = await authAPI.signIn(email, password);
       if (result?.user) {
@@ -54,12 +53,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.user));
         return { error: null };
       }
-      return { error: 'Credenciais inválidas' };
+      return { error: result?.error || 'Credenciais inválidas' };
     } catch (error) {
       console.error('Login error:', error);
       return { error: 'Erro ao fazer login. Tente novamente.' };
-    } finally {
-      setLoading(false);
     }
   };
 

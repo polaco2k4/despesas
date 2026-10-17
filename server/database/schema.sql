@@ -133,6 +133,18 @@ BEGIN
 END
 GO
 
+-- Tabela de Configurações do Sistema (chave/valor)
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[configuracoes_sistema]') AND type in (N'U'))
+BEGIN
+    CREATE TABLE configuracoes_sistema (
+        chave NVARCHAR(100) PRIMARY KEY,
+        valor NVARCHAR(MAX) NULL,
+        updated_at DATETIME2 DEFAULT GETDATE(),
+        updated_by UNIQUEIDENTIFIER NULL
+    );
+END
+GO
+
 -- Índices para melhorar performance
 CREATE NONCLUSTERED INDEX IX_usuarios_email ON usuarios(email);
 CREATE NONCLUSTERED INDEX IX_usuarios_departamento ON usuarios(departamento_id);
