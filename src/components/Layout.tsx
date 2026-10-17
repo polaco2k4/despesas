@@ -23,6 +23,7 @@ import {
   FileSignature
 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { configuracoesAPI, IMAGEM_LOGIN_EVENT, type ImagemLoginEventDetail } from '../lib/backendApi';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,6 +35,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPage = location.pathname.split('/')[1] || 'dashboard';
+  const [logo, setLogo] = useState<string | null>(() => configuracoesAPI.getCachedImagem('logo'));
+
+  // Load the logo configured by the admin (same as the login page)
+  useEffect(() => {
+    let active = true;
+    configuracoesAPI
+      .getPublicas()
+      .then(({ logo }) => {
+        if (!active) return;
+        setLogo(logo);
+        configuracoesAPI.setCachedImagem('logo', logo);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Update immediately when the admin changes the logo in Configurações
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { tipo, imagem } = (e as CustomEvent<ImagemLoginEventDetail>).detail;
+      if (tipo === 'logo') setLogo(imagem);
+    };
+    window.addEventListener(IMAGEM_LOGIN_EVENT, handler);
+    return () => window.removeEventListener(IMAGEM_LOGIN_EVENT, handler);
+  }, []);
 
   const handleSignOut = async () => {
     await signOut();
@@ -88,14 +116,31 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       }`}>
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="p-6 border-b border-gray-700">
-            <div className="flex items-center justify-between">
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                BudgetFlow
-              </h1>
+          <div className="relative px-6 py-5 border-b border-gray-700">
+            <div className="flex items-center justify-center">
+              {logo ? (
+                <div className="w-full bg-white rounded-xl px-4 py-3 shadow-lg flex items-center justify-center">
+                  <img
+                    src={logo}
+                    alt="Logotipo"
+                    className="h-14 w-full object-contain"
+                    onError={() => setLogo(null)}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center shadow-lg">
+                    <Building2 className="h-5 w-5 text-white" />
+                  </div>
+                  <h1 className="text-2xl font-black tracking-wider bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                    SIGE
+                  </h1>
+                </div>
+              )}
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="lg:hidden p-1.5 rounded-md hover:bg-gray-700 transition-colors"
+                className="lg:hidden absolute top-2 right-2 p-1.5 rounded-md bg-gray-800/80 hover:bg-gray-700 transition-colors"
+                aria-label="Fechar menu"
               >
                 <X size={20} className="text-gray-300" />
               </button>

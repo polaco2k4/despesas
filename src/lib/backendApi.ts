@@ -110,6 +110,9 @@ export interface ImagensLogin {
   fundo: string | null;
 }
 
+export const IMAGEM_LOGIN_EVENT = 'sige:imagem-login';
+export type ImagemLoginEventDetail = { tipo: ImagemLogin; imagem: string | null };
+
 const IMAGEM_CACHE_KEYS: Record<ImagemLogin, string> = {
   logo: 'sgbd_logo',
   fundo: 'sgbd_fundo_login',
@@ -149,6 +152,8 @@ export const configuracoesAPI = {
     } catch {
       // ignore storage errors (quota, private mode)
     }
+    // Notify open components (e.g. sidebar) so they update without a reload
+    window.dispatchEvent(new CustomEvent(IMAGEM_LOGIN_EVENT, { detail: { tipo, imagem } }));
   },
 };
 
