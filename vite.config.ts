@@ -8,7 +8,11 @@ export default defineConfig({
     //https: true
     host: true,
     port: 5173,
-         },
+    allowedHosts: ['sige.azfbusiness.cloud'],
+  },
+  preview: {
+    allowedHosts: ['sige.azfbusiness.cloud'],
+  },
   optimizeDeps: {
     exclude: ['lucide-react'],
   },

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useFeedback } from '../contexts/FeedbackContext';
 import { useAuth } from '../contexts/AuthContext';
-import { contratosAPI, fornecedoresAPI, departamentosAPI, usuariosAPI } from '../lib/backendApi';
+import { API_BASE_URL, contratosAPI, fornecedoresAPI, departamentosAPI, usuariosAPI } from '../lib/backendApi';
 import { 
   Plus, 
   Search, 
@@ -266,11 +266,8 @@ const Contratos: React.FC = () => {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const API_URL = window.location.hostname === 'localhost' 
-        ? 'http://localhost:3001/api' 
-        : `${window.location.protocol}//${window.location.hostname}:3001/api`;
 
-      const response = await fetch(`${API_URL}/contratos/${contratoId}/upload-anexo`, {
+      const response = await fetch(`${API_BASE_URL}/contratos/${contratoId}/upload-anexo`, {
         method: 'POST',
         headers: {
           'x-user-id': userProfile?.id || '',
@@ -312,11 +309,8 @@ const Contratos: React.FC = () => {
 
   const handleDownloadFile = async (contratoId: string) => {
     try {
-      const API_URL = window.location.hostname === 'localhost' 
-        ? 'http://localhost:3001/api' 
-        : `${window.location.protocol}//${window.location.hostname}:3001/api`;
 
-      window.open(`${API_URL}/contratos/${contratoId}/download-anexo`, '_blank');
+      window.open(`${API_BASE_URL}/contratos/${contratoId}/download-anexo`, '_blank');
     } catch (error) {
       setAlertDialog({
         isOpen: true,
@@ -331,11 +325,8 @@ const Contratos: React.FC = () => {
     if (!await confirm({ title: 'Remover o ficheiro anexado?', message: 'Esta acção não pode ser desfeita.', confirmText: 'Remover', variant: 'danger' })) return;
 
     try {
-      const API_URL = window.location.hostname === 'localhost' 
-        ? 'http://localhost:3001/api' 
-        : `${window.location.protocol}//${window.location.hostname}:3001/api`;
 
-      const response = await fetch(`${API_URL}/contratos/${contratoId}/anexo`, {
+      const response = await fetch(`${API_BASE_URL}/contratos/${contratoId}/anexo`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -1200,11 +1191,8 @@ const Contratos: React.FC = () => {
                           onClick={async () => {
                             if (await confirm({ title: 'Renovar contrato?', message: 'Será criado um novo contrato a partir deste.', confirmText: 'Renovar', variant: 'info' })) {
                               try {
-                                const API_URL = window.location.hostname === 'localhost' 
-                                  ? 'http://localhost:3001/api' 
-                                  : `${window.location.protocol}//${window.location.hostname}:3001/api`;
 
-                                const response = await fetch(`${API_URL}/contratos/${selectedContrato.id}/renovar`, {
+                                const response = await fetch(`${API_BASE_URL}/contratos/${selectedContrato.id}/renovar`, {
                                   method: 'POST',
                                   headers: {
                                     'Content-Type': 'application/json',

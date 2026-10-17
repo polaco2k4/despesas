@@ -1,11 +1,14 @@
 // Dynamic API URL based on current hostname
+// Must match PORT in server/.env
+const API_PORT = import.meta.env.VITE_API_PORT || '3003';
+
 const getApiBaseUrl = () => {
   const hostname = window.location.hostname;
   // If accessing via IP or non-localhost, use the same hostname for API
   if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:3001/api`;
+    return `http://${hostname}:${API_PORT}/api`;
   }
-  return 'http://localhost:3001/api';
+  return `http://localhost:${API_PORT}/api`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();
