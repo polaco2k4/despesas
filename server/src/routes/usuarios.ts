@@ -4,7 +4,8 @@ import {
   getUsuarioById,
   createUsuario,
   updateUsuario,
-  deleteUsuario
+  deleteUsuario,
+  resetPassword
 } from '../controllers/usuariosController.js';
 import { requireAdmin } from '../middleware/requireAuth.js';
 
@@ -14,6 +15,7 @@ router.get('/', getAllUsuarios);
 router.get('/:id', getUsuarioById);
 router.post('/', requireAdmin, createUsuario);
 router.put('/:id', requireAdmin, updateUsuario);
+router.put('/:id/password', requireAdmin, resetPassword);
 router.delete('/:id', requireAdmin, deleteUsuario);
 
 export default router;

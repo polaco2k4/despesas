@@ -209,6 +209,34 @@ export const updateUsuario = async (req: Request, res: Response) => {
   }
 };
 
+export const resetPassword = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { password } = req.body;
+
+    if (!password || typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter pelo menos 6 caracteres' });
+    }
+
+    const userResults = await executeQuery(`SELECT id FROM usuarios WHERE id = @id`, { id });
+    if (userResults.length === 0) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+
+    // Mesmo formato do createUsuario (texto plano, comparado no login)
+    await executeQuery(`
+      UPDATE usuarios
+      SET password_hash = @password_hash, updated_at = GETDATE()
+      WHERE id = @id
+    `, { id, password_hash: password });
+
+    res.json({ message: 'Senha redefinida com sucesso' });
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ error: 'Erro ao redefinir senha' });
+  }
+};
+
 export const deleteUsuario = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

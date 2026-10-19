@@ -7,7 +7,8 @@ import {
   Edit, 
   Trash2,
   Search,
-  XCircle
+  XCircle,
+  KeyRound
 } from 'lucide-react';
 
 type FormData = Omit<Usuario, 'id' | 'created_at' | 'updated_at' | 'departamento'> & {
@@ -37,6 +38,8 @@ const Usuarios: React.FC = () => {
   const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [currentPage, setCurrentPage] = useState(1);
+  const [resetUsuario, setResetUsuario] = useState<Usuario | null>(null);
+  const [resetPassword, setResetPassword] = useState({ password: '', confirmPassword: '' });
   const recordsPerPage = 10;
 
   useEffect(() => {
@@ -152,6 +155,34 @@ const Usuarios: React.FC = () => {
     } catch (error) {
       console.error('Error saving usuario:', error);
       toast.error('Não foi possível guardar o utilizador. Tente novamente.');
+    }
+  };
+
+  const handleCloseResetModal = () => {
+    setResetUsuario(null);
+    setResetPassword({ password: '', confirmPassword: '' });
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetUsuario) return;
+
+    if (resetPassword.password.length < 6) {
+      toast.warning('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (resetPassword.password !== resetPassword.confirmPassword) {
+      toast.warning('As senhas não coincidem.');
+      return;
+    }
+
+    try {
+      await usuariosAPI.resetPassword(resetUsuario.id, resetPassword.password);
+      toast.success(`Senha de ${resetUsuario.nome} redefinida com sucesso.`);
+      handleCloseResetModal();
+    } catch (error: any) {
+      console.error('Error resetting password:', error);
+      toast.error(error.message || 'Não foi possível redefinir a senha.');
     }
   };
 
@@ -327,6 +358,13 @@ const Usuarios: React.FC = () => {
                           title="Editar"
                         >
                           <Edit size={16} />
+                        </button>
+                        <button
+                          onClick={() => setResetUsuario(usuario)}
+                          className="p-1.5 text-amber-600 hover:text-amber-900 hover:bg-amber-50 rounded"
+                          title="Redefinir senha"
+                        >
+                          <KeyRound size={16} />
                         </button>
                         <button
                           onClick={() => handleDeleteUsuario(usuario.id)}
@@ -586,6 +624,72 @@ const Usuarios: React.FC = () => {
                   className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   {editingUsuario ? 'Atualizar' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {resetUsuario && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Redefinir Senha</h2>
+              <button
+                onClick={handleCloseResetModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Nova senha local para <span className="font-medium">{resetUsuario.nome}</span> ({resetUsuario.email}).
+              Não altera a senha do Active Directory.
+            </p>
+            <form onSubmit={handleResetPassword}>
+              <div className="mb-4">
+                <label htmlFor="resetPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nova Senha *
+                </label>
+                <input
+                  type="password"
+                  id="resetPassword"
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  value={resetPassword.password}
+                  onChange={(e) => setResetPassword({ ...resetPassword, password: e.target.value })}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="resetConfirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirmar Senha *
+                </label>
+                <input
+                  type="password"
+                  id="resetConfirmPassword"
+                  autoComplete="new-password"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  value={resetPassword.confirmPassword}
+                  onChange={(e) => setResetPassword({ ...resetPassword, confirmPassword: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={handleCloseResetModal}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Redefinir
                 </button>
               </div>
             </form>

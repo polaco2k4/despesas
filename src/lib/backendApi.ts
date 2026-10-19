@@ -220,7 +220,13 @@ export const usuariosAPI = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  
+
+  resetPassword: (id: string, password: string) =>
+    fetchAPI<{ message: string }>(`/usuarios/${id}/password`, {
+      method: 'PUT',
+      body: JSON.stringify({ password }),
+    }),
+
   delete: (id: string) =>
     fetchAPI<void>(`/usuarios/${id}`, {
       method: 'DELETE',
