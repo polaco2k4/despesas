@@ -207,6 +207,9 @@ const Orcamentos: React.FC = () => {
     return matchesSearch;
   });
 
+  const orcamentoTotal = filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0);
+  const totalRubricasGeral = filteredOrcamentos.reduce((sum, o) => sum + (o.rubricas?.length || 0), 0);
+
   // Pagination logic
   const itemsPerPage = 10;
   const totalPages = Math.ceil(filteredOrcamentos.length / itemsPerPage);
@@ -243,6 +246,29 @@ const Orcamentos: React.FC = () => {
             <span>Novo Orçamento</span>
           </button>
         )}
+      </div>
+
+      {/* Orçamento Total */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-blue-50 rounded-xl">
+              <PiggyBank className="h-6 w-6 text-blue-600" />
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Orçamento Total</p>
+              <p className="text-xl font-bold text-gray-900">
+                Kz {orcamentoTotal.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>{filteredOrcamentos.length} orçamentos</span>
+              <span className="text-blue-600">{totalRubricasGeral} rubricas</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search */}
