@@ -63,6 +63,24 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const formatKz = (valor?: number) =>
+    (valor || 0).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Os números de pendentes/pagas já vêm filtrados pelo servidor de acordo com o perfil
+  const pendentesLabel = {
+    admin: 'Em análise',
+    gestor: 'Aguardam a sua aprovação',
+    adm_area: 'Aguardam a sua aprovação',
+    colaborador: 'As suas despesas em análise'
+  }[userProfile?.role ?? 'admin'];
+
+  const pagasLabel = {
+    admin: 'Todos os departamentos',
+    gestor: 'Do seu departamento',
+    adm_area: 'Das suas áreas',
+    colaborador: 'As suas despesas pagas'
+  }[userProfile?.role ?? 'admin'];
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'aprovada': return 'bg-green-100 text-green-800';
@@ -91,7 +109,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
           <div className="flex items-center justify-between">
             <div className="p-3 bg-blue-50 rounded-xl">
@@ -144,17 +162,39 @@ const Dashboard: React.FC = () => {
               <Clock className="h-6 w-6 text-yellow-600" />
             </div>
             <div className="text-right">
-              <p className="text-xs font-medium text-gray-500">Pendentes</p>
+              <p className="text-xs font-medium text-gray-500">Despesas Pendentes</p>
               <p className="text-xl font-bold text-gray-900">
-                {stats?.despesasPendentes || 0}
+                Kz {formatKz(stats?.totalPendente)}
               </p>
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-100">
             <div className="flex items-center justify-between text-xs text-gray-500">
-              <span>Em análise</span>
+              <span>{pendentesLabel}</span>
               <span className="text-yellow-600">
                 {stats?.despesasPendentes || 0} itens
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-emerald-50 rounded-xl">
+              <CheckCircle className="h-6 w-6 text-emerald-600" />
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Despesas Pagas</p>
+              <p className="text-xl font-bold text-gray-900">
+                Kz {formatKz(stats?.totalPago)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>{pagasLabel}</span>
+              <span className="text-emerald-600">
+                {stats?.despesasPagas || 0} itens
               </span>
             </div>
           </div>

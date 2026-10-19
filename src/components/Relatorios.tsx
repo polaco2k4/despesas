@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { despesasAPI, orcamentosAPI, departamentosAPI, rubricasAPI } from '../lib/backendApi';
 import type { Despesa, Orcamento, Departamento, Rubrica } from '../types/database';
@@ -78,6 +78,10 @@ const Relatorios: React.FC = () => {
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
   const [loading, setLoading] = useState(true);
   const [rubricas, setRubricas] = useState<Rubrica[]>([]);
+  // Referências aos gráficos da página, usadas para incluí-los no PDF
+  const monthlyChartRef = useRef<ChartJS<'line'>>(null);
+  const statusChartRef = useRef<ChartJS<'pie'>>(null);
+  const departmentChartRef = useRef<ChartJS<'bar'>>(null);
   const [filters, setFilters] = useState({
     departamento_id: '',
     ano: new Date().getFullYear(),
@@ -139,8 +143,12 @@ const Relatorios: React.FC = () => {
     const despesaDate = new Date(despesa.created_at);
     const matchesDepartamento = !filters.departamento_id || 
       despesa.rubrica?.orcamento?.departamento_id === filters.departamento_id;
-    const matchesAno = despesaDate.getFullYear() === filters.ano;
-    const matchesStatus = !filters.status || despesa.status === filters.status;
+    // A despesa pertence ao ano do orçamento da sua rubrica (o mesmo ano do Orçamento Total)
+    const anoDespesa = despesa.rubrica?.orcamento?.ano ?? despesaDate.getFullYear();
+    const matchesAno = Number(anoDespesa) === filters.ano;
+    const matchesStatus = !filters.status || (filters.status === 'pendente'
+      ? despesa.status.startsWith('pendente')
+      : despesa.status === filters.status);
     const matchesMes = !filters.mes || (despesaDate.getMonth() + 1).toString() === filters.mes;
     const matchesRubrica = !filters.rubrica_id || despesa.rubrica_id === filters.rubrica_id;
     
@@ -153,6 +161,16 @@ const Relatorios: React.FC = () => {
     
     return matchesDepartamento && matchesAno;
   });
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'aprovada': return 'Aprovada';
+      case 'paga': return 'Paga';
+      case 'negada': return 'Negada';
+      case 'rejeitada': return 'Rejeitada';
+      default: return 'Pendente';
+    }
+  };
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -203,7 +221,9 @@ const Relatorios: React.FC = () => {
     const totalOrcamento = filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0);
     const totalDespesas = filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
     const utilizacao = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
-    
+    const pagas = filteredDespesas.filter(d => d.status === 'paga');
+    const totalPago = pagas.reduce((sum, d) => sum + d.valor, 0);
+
     doc.setFontSize(14);
     doc.text('Resumo:', 20, yPos);
     yPos += 10;
@@ -213,10 +233,47 @@ const Relatorios: React.FC = () => {
     yPos += 5;
     doc.text(`Despesas Aprovadas: Kz ${totalDespesas.toLocaleString()}`, 20, yPos);
     yPos += 5;
+    doc.text(`Despesas Pagas: Kz ${totalPago.toLocaleString()} (${pagas.length} itens)`, 20, yPos);
+    yPos += 5;
     doc.text(`Taxa de Utilização: ${utilizacao.toFixed(1)}%`, 20, yPos);
     yPos += 5;
     doc.text(`Total de Despesas: ${filteredDespesas.length}`, 20, yPos);
     yPos += 15;
+
+    // Gráficos (capturados dos gráficos apresentados na página)
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const graficos: { titulo: string; chart: ChartJS | null; maxAltura: number }[] = [
+      { titulo: 'Despesas Mensais', chart: monthlyChartRef.current, maxAltura: 75 },
+      { titulo: 'Distribuição por Status', chart: statusChartRef.current, maxAltura: 60 },
+      { titulo: 'Despesas por Departamento', chart: departmentChartRef.current, maxAltura: 90 }
+    ];
+
+    graficos.forEach(({ titulo, chart, maxAltura }) => {
+      if (!chart) return;
+      const proporcao = chart.width / chart.height;
+      let largura = 170;
+      let altura = largura / proporcao;
+      if (altura > maxAltura) {
+        altura = maxAltura;
+        largura = altura * proporcao;
+      }
+
+      if (yPos + altura + 12 > pageHeight - 15) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      doc.setFontSize(12);
+      doc.text(titulo, 20, yPos);
+      yPos += 4;
+      doc.addImage(chart.toBase64Image('image/png', 1), 'PNG', 20, yPos, largura, altura);
+      yPos += altura + 10;
+    });
+
+    if (yPos > pageHeight - 40) {
+      doc.addPage();
+      yPos = 20;
+    }
     
     // Despesas table
     if (filteredDespesas.length > 0) {
@@ -229,7 +286,7 @@ const Relatorios: React.FC = () => {
         despesa.usuario?.nome || '',
         despesa.rubrica?.nome || '',
         `Kz ${despesa.valor.toLocaleString()}`,
-        despesa.status,
+        getStatusLabel(despesa.status),
         new Date(despesa.created_at).toLocaleDateString('pt-PT')
       ]);
       
@@ -248,32 +305,46 @@ const Relatorios: React.FC = () => {
   };
 
   const getStatusStats = () => {
-    const pendentes = filteredDespesas.filter(d => d.status === 'pendente_gestor').length;
-    const aprovadas = filteredDespesas.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
+    const pendentes = filteredDespesas.filter(d => d.status.startsWith('pendente')).length;
+    const aprovadas = filteredDespesas.filter(d => d.status === 'aprovada').length;
+    const pagas = filteredDespesas.filter(d => d.status === 'paga').length;
     const negadas = filteredDespesas.filter(d => d.status === 'negada').length;
-    
-    return { pendentes, aprovadas, negadas };
+
+    return { pendentes, aprovadas, pagas, negadas };
+  };
+
+  // A API devolve só o departamento_id do orçamento; o nome vem da lista de departamentos
+  const getDepartamentoNome = (despesa: Despesa) => {
+    const deptId = despesa.rubrica?.orcamento?.departamento_id?.toString().toUpperCase();
+    return despesa.rubrica?.orcamento?.departamento?.nome ||
+      departamentos.find(d => d.id?.toString().toUpperCase() === deptId)?.nome;
   };
 
   const getDepartmentStats = () => {
-    const stats: { [key: string]: { nome: string; total: number; aprovadas: number } } = {};
-    
+    const stats: { [key: string]: { nome: string; total: number; pendentes: number; aprovadas: number; pagas: number } } = {};
+
     filteredDespesas.forEach(despesa => {
-      const deptId = despesa.rubrica?.orcamento?.departamento_id;
-      const deptNome = despesa.rubrica?.orcamento?.departamento?.nome;
-      
+      const deptId = despesa.rubrica?.orcamento?.departamento_id?.toString().toUpperCase();
+      const deptNome = getDepartamentoNome(despesa);
+
       if (deptId && deptNome) {
         if (!stats[deptId]) {
-          stats[deptId] = { nome: deptNome, total: 0, aprovadas: 0 };
+          stats[deptId] = { nome: deptNome, total: 0, pendentes: 0, aprovadas: 0, pagas: 0 };
+        }
+        if (despesa.status.startsWith('pendente')) {
+          stats[deptId].pendentes += despesa.valor;
+        } else if (despesa.status === 'aprovada') {
+          stats[deptId].aprovadas += despesa.valor;
+        } else if (despesa.status === 'paga') {
+          stats[deptId].pagas += despesa.valor;
+        } else {
+          return;
         }
         stats[deptId].total += despesa.valor;
-        if (despesa.status === 'aprovada') {
-          stats[deptId].aprovadas += despesa.valor;
-        }
       }
     });
-    
-    return Object.values(stats);
+
+    return Object.values(stats).sort((a, b) => b.total - a.total);
   };
 
   const statusStats = getStatusStats();
@@ -282,10 +353,10 @@ const Relatorios: React.FC = () => {
 
   // Prepare data for charts
   const statusChartData = {
-    labels: ['Pendentes', 'Aprovadas', 'Negadas'],
+    labels: ['Pendentes', 'Aprovadas', 'Pagas', 'Negadas'],
     datasets: [{
-      data: [statusStats.pendentes, statusStats.aprovadas, statusStats.negadas],
-      backgroundColor: ['#F59E0B', '#10B981', '#EF4444'],
+      data: [statusStats.pendentes, statusStats.aprovadas, statusStats.pagas, statusStats.negadas],
+      backgroundColor: ['#F59E0B', '#10B981', '#0EA5E9', '#EF4444'],
       borderWidth: 1,
     }]
   };
@@ -315,18 +386,12 @@ const Relatorios: React.FC = () => {
   // Department expenses data
   const departmentChartData = {
     labels: departmentStats.map(dept => dept.nome),
-    datasets: [{
-      label: 'Despesas por Departamento (Kz)',
-      data: departmentStats.map(dept => dept.total),
-      backgroundColor: [
-        'rgba(59, 130, 246, 0.7)',
-        'rgba(16, 185, 129, 0.7)',
-        'rgba(245, 158, 11, 0.7)',
-        'rgba(139, 92, 246, 0.7)',
-        'rgba(20, 184, 166, 0.7)'
-      ],
-      borderWidth: 1
-    }]
+    // Mesmas cores da "Distribuição por Status"; negadas não contam como despesa
+    datasets: [
+      { label: 'Pendentes', data: departmentStats.map(dept => dept.pendentes), backgroundColor: '#F59E0B' },
+      { label: 'Aprovadas', data: departmentStats.map(dept => dept.aprovadas), backgroundColor: '#10B981' },
+      { label: 'Pagas', data: departmentStats.map(dept => dept.pagas), backgroundColor: '#0EA5E9' }
+    ].map(dataset => ({ ...dataset, borderColor: '#FFFFFF', borderWidth: 1, borderRadius: 4, barThickness: 18 }))
   };
 
   // Chart options
@@ -361,8 +426,10 @@ const Relatorios: React.FC = () => {
   const totalOrcamento = filteredOrcamentos.reduce((sum, o) => sum + o.valor_total, 0);
   const totalDespesas = filteredDespesas.reduce((sum, d) => sum + (d.status === 'aprovada' ? d.valor : 0), 0);
   const utilizacao = totalOrcamento > 0 ? (totalDespesas / totalOrcamento) * 100 : 0;
-  const totalPendentes = filteredDespesas.filter(d => d.status === 'pendente_gestor').length;
+  const totalPendentes = filteredDespesas.filter(d => d.status.startsWith('pendente')).length;
   const totalAprovadas = filteredDespesas.filter(d => d.status === 'aprovada' || d.status === 'paga').length;
+  const despesasPagas = filteredDespesas.filter(d => d.status === 'paga');
+  const totalPago = despesasPagas.reduce((sum, d) => sum + d.valor, 0);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const totalNegadas = filteredDespesas.filter(d => d.status === 'negada').length;
 
@@ -490,7 +557,7 @@ const Relatorios: React.FC = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-200">
           <div className="flex items-center justify-between">
             <div className="p-3 bg-blue-50 rounded-xl">
@@ -530,6 +597,28 @@ const Relatorios: React.FC = () => {
               <span className="text-gray-500">Taxa de Utilização</span>
               <span className={`font-semibold ${utilizacao > 80 ? 'text-red-600' : utilizacao > 50 ? 'text-yellow-600' : 'text-green-600'}`}>
                 {utilizacao.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all duration-200">
+          <div className="flex items-center justify-between">
+            <div className="p-3 bg-emerald-50 rounded-xl">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+            </div>
+            <div className="text-right">
+              <p className="text-xs font-medium text-gray-500">Despesas Pagas</p>
+              <p className="text-xl font-bold text-gray-900">
+                Kz {totalPago.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="flex items-center justify-between text-xs text-gray-500">
+              <span>Quantidade</span>
+              <span className="font-medium text-emerald-600">
+                {despesasPagas.length} itens
               </span>
             </div>
           </div>
@@ -608,8 +697,9 @@ const Relatorios: React.FC = () => {
             </div>
           </div>
           <div className="h-64">
-            <Line 
-              data={monthlyChartData} 
+            <Line
+              ref={monthlyChartRef}
+              data={monthlyChartData}
               options={{
                 ...chartOptions,
                 plugins: {
@@ -644,8 +734,9 @@ const Relatorios: React.FC = () => {
           </div>
           <div className="h-64 flex items-center justify-center">
             <div className="w-48 h-48">
-              <Pie 
-                data={statusChartData} 
+              <Pie
+                ref={statusChartRef}
+                data={statusChartData}
                 options={{
                   responsive: true,
                   plugins: {
@@ -697,29 +788,47 @@ const Relatorios: React.FC = () => {
             </div>
           </div>
           <div className="h-80">
-            <Bar 
-              data={departmentChartData} 
-              options={{
-                ...chartOptions,
-                indexAxis: 'y' as const,
-                scales: {
-                  x: {
-                    beginAtZero: true,
-                    grid: {
-                      display: false
-                    },
-                    ticks: {
-                      callback: (value) => `Kz ${value}`
+            {departmentStats.length > 0 ? (
+              <Bar
+                ref={departmentChartRef}
+                data={departmentChartData}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  indexAxis: 'y' as const,
+                  plugins: {
+                    legend: { position: 'top' as const },
+                    tooltip: {
+                      callbacks: {
+                        label: (context: any) => `${context.dataset.label}: Kz ${Number(context.raw).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                        footer: (items: any[]) => {
+                          const total = departmentStats[items[0].dataIndex]?.total || 0;
+                          return `Total: Kz ${total.toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                        }
+                      }
                     }
                   },
-                  y: {
-                    grid: {
-                      display: false
+                  scales: {
+                    x: {
+                      stacked: true,
+                      beginAtZero: true,
+                      grid: { color: '#F3F4F6' },
+                      ticks: {
+                        callback: (value) => `Kz ${Number(value).toLocaleString('pt-PT', { notation: 'compact' })}`
+                      }
+                    },
+                    y: {
+                      stacked: true,
+                      grid: { display: false }
                     }
                   }
-                }
-              }} 
-            />
+                }}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                Nenhuma despesa encontrada com os filtros atuais
+              </div>
+            )}
           </div>
         </div>
 
@@ -817,7 +926,7 @@ const Relatorios: React.FC = () => {
                       {despesa.usuario?.nome}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
-                      {despesa.rubrica?.orcamento?.departamento?.nome}
+                      {getDepartamentoNome(despesa)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       Kz {despesa.valor.toLocaleString()}
@@ -828,9 +937,7 @@ const Relatorios: React.FC = () => {
                         despesa.status === 'negada' ? 'text-red-600 bg-red-50' :
                         'text-yellow-600 bg-yellow-50'
                       }`}>
-                        {despesa.status === 'aprovada' ? 'Aprovada' :
-                         despesa.status === 'paga' ? 'Paga' :
-                         despesa.status === 'negada' ? 'Negada' : 'Pendente_Gestor'}
+                        {getStatusLabel(despesa.status)}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">

@@ -281,6 +281,7 @@ export const getAllDespesas = async (req: Request, res: Response) => {
         r.valor as rubrica_valor,
         o.id as orcamento_id,
         o.departamento_id as orcamento_departamento_id,
+        o.ano as orcamento_ano,
         dept.id as usuario_departamento_id,
         dept.nome as usuario_departamento_nome,
         u.id as usuario_id_nested,
@@ -372,7 +373,8 @@ export const getAllDespesas = async (req: Request, res: Response) => {
           valor: row.rubrica_valor,
           orcamento: row.orcamento_id ? {
             id: row.orcamento_id,
-            departamento_id: row.orcamento_departamento_id
+            departamento_id: row.orcamento_departamento_id,
+            ano: row.orcamento_ano
           } : undefined
         } : undefined,
         usuario: row.usuario_id_nested ? {
