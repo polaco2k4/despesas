@@ -46,6 +46,8 @@ interface Estatisticas {
 
 const FinancasContent: React.FC = () => {
   const { userProfile } = useAuth();
+  // Administrador não faz pagamentos nem rejeições
+  const isAdmin = userProfile?.role === 'admin';
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [rubricas, setRubricas] = useState<Rubrica[]>([]);
   const [departamentos, setDepartamentos] = useState<Departamento[]>([]);
@@ -346,6 +348,7 @@ const FinancasContent: React.FC = () => {
   };
 
   const handleOpenPaymentModal = (despesa: Despesa) => {
+    if (isAdmin) return;
     setSelectedDespesa(despesa);
     setPaymentNumeroOperacao('');
     setPaymentDataPagamento('');
@@ -417,6 +420,7 @@ const FinancasContent: React.FC = () => {
   };
 
   const handleOpenRejectionModal = (despesa: Despesa) => {
+    if (isAdmin) return;
     setSelectedDespesa(despesa);
     setRejectionReason('');
     setShowRejectionModal(true);
@@ -1018,25 +1022,25 @@ const FinancasContent: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleOpenPaymentModal(despesa)}
-                          disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
+                          disabled={isAdmin || isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
                           className={`p-1.5 rounded ${
-                            despesa.status === 'paga' || despesa.status === 'negada'
+                            isAdmin || despesa.status === 'paga' || despesa.status === 'negada'
                               ? 'text-gray-400 cursor-not-allowed'
                               : 'text-green-600 hover:text-green-900 hover:bg-green-50'
                           } disabled:opacity-50`}
-                          title={despesa.status === 'paga' ? 'Pago' : 'Pagar'}
+                          title={despesa.status === 'paga' ? 'Pago' : isAdmin ? 'Administrador não pode efetuar pagamentos' : 'Pagar'}
                         >
                           <DollarSign className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => despesa.status === 'negada' ? null : handleOpenRejectionModal(despesa)}
-                          disabled={isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
+                          disabled={isAdmin || isProcessing || despesa.status === 'paga' || despesa.status === 'negada'}
                           className={`p-1.5 rounded ${
-                            despesa.status === 'paga' || despesa.status === 'negada'
+                            isAdmin || despesa.status === 'paga' || despesa.status === 'negada'
                               ? 'text-gray-400 cursor-not-allowed'
                               : 'text-red-600 hover:text-red-900 hover:bg-red-50'
                           } disabled:opacity-50`}
-                          title={despesa.status === 'negada' ? 'Negado' : 'Rejeitar'}
+                          title={despesa.status === 'negada' ? 'Negado' : isAdmin ? 'Administrador não pode rejeitar despesas' : 'Rejeitar'}
                         >
                           <XCircle className="h-4 w-4" />
                         </button>
